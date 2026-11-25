@@ -1,0 +1,314 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>OrbitWork · 产品文档</title>
+<meta name="description" content="OrbitWork 产品需求、体验设计、功能规格、权限模型与验收说明。" />
+<link rel="stylesheet" href="./doc.css" />
+</head>
+<body>
+<header class="doc-top">
+  <div class="doc-top-inner">
+    <a class="doc-brand" href="./index.html"><span class="doc-mark">◎</span>OrbitWork</a>
+    <nav>
+      <a href="./product.html">产品文档</a>
+      <a href="./architecture.html">架构文档</a>
+      <a href="./index.html">文档首页</a>
+      <a href="#acceptance">验收</a>
+    </nav>
+  </div>
+</header>
+
+<div class="doc-shell">
+  <aside class="doc-side" aria-label="目录">
+    <div class="side-title">Product</div>
+    <a href="#summary" class="active">摘要与定位</a>
+    <a href="#benchmark">对标与差异</a>
+    <a href="#users">用户与场景</a>
+    <a href="#principles">产品原则</a>
+    <a href="#journey">核心旅程</a>
+    <a href="#experience">体验与界面</a>
+    <a href="#specs">功能规格</a>
+    <a href="#agents">智能体工作台</a>
+    <a href="#memory">记忆</a>
+    <a href="#sandbox">沙箱</a>
+    <a href="#assets">专家 / 技能 / 连接器</a>
+    <a href="#marketplace">插件市场</a>
+    <a href="#permissions">权限与治理</a>
+    <a href="#acceptance">验收清单</a>
+    <a href="#limits">边界与路线图</a>
+    <div class="side-sep"></div>
+    <div class="side-title">Deliverables</div>
+    <a href="./architecture.html">架构与技术文档</a>
+    <a href="./index.html">文档封面 / 快速开始</a>
+  </aside>
+
+  <main class="doc-main">
+    <div class="doc-hero">
+      <div class="doc-eyebrow">◎ Product Specification · v1.0</div>
+      <h1>OrbitWork 产品文档</h1>
+      <p class="doc-lead">一个面向团队、可私有化部署的 AI 智能体工作台：以对话为入口，把专家、技能、连接器与插件市场组合成可复用、可治理的工作能力。</p>
+      <div class="doc-meta">
+        <span>版本 1.0.0</span><span>2026-11-25</span><span>Docker-first / 阿里云 ECS 可部署</span><span>中文界面</span>
+      </div>
+      <div class="doc-actions">
+        <a class="btn btn-dark" href="./architecture.html">阅读架构文档 →</a>
+        <a class="btn" href="#acceptance">查看验收结果</a>
+        <a class="btn" href="../README.md">README</a>
+      </div>
+    </div>
+
+    <section id="summary">
+      <div class="section-kicker">01 · Executive summary</div>
+      <h2>把“会用 AI”变成可复用的组织能力。</h2>
+      <p>多数 AI 产品停留在“对话框 + 通用助手”。团队真正缺少的是：角色化的专家、可沉淀的方法、能连接真实系统的工具，以及让这些能力安全流动的市场。OrbitWork 用五个核心原语——<strong>工作区、智能体、记忆、沙箱、模型</strong>——构成工作台，再用<strong>专家、技能、连接器、插件</strong>让能力被发布、安装和复用。</p>
+      <div class="grid-3">
+        <div class="card"><div class="kicker">Workbench</div><h3>对话即生产</h3><p class="small">新建任务、选择智能体与模型、流式回答、工具调用、可取消、刷新可恢复。</p></div>
+        <div class="card"><div class="kicker">Capability</div><h3>能力可组装</h3><p class="small">角色指令 × 技能 × 连接器 × 记忆 × 沙箱，组合成专属智能体。</p></div>
+        <div class="card"><div class="kicker">Network</div><h3>市场可流通</h3><p class="small">专家/技能/连接器可发布，插件可一键安装；版本快照不可变。</p></div>
+      </div>
+      <div class="callout"><strong>当前交付状态：</strong>产品、架构、前后端、数据库迁移、测试、Docker 配置与产品/架构文档均已落在本仓库；23 项自动化测试通过，TypeScript 类型检查通过。生产运行前只需替换环境变量中的密钥与管理员密码。</div>
+    </section>
+
+    <section id="benchmark">
+      <div class="section-kicker">02 · Landscape</div>
+      <h2>对标产品与取舍</h2>
+      <table>
+        <thead><tr><th>对标</th><th>借鉴</th><th>OrbitWork 的取舍</th></tr></thead>
+        <tbody>
+          <tr><td><strong>WorkBuddy</strong></td><td>任务式入口、“我帮你”的对话体验、左侧工作区/任务结构、专家与技能卡片</td><td>保留低噪音的深色 Studio 体验；不自建桌面客户端，直接交付 Web App；不追求无限任务类型，先把会话→工具→交付闭环做通。</td></tr>
+          <tr><td><strong>DeepSeek Harness</strong></td><td>工作区、模型、记忆、沙箱、技能/连接器的心智模型</td><td>用同一套原语实现可部署的团队版；SQLite 单节点 + Docker Compose，优先私有化与低运维成本。</td></tr>
+          <tr><td><strong>Coze / Dify</strong></td><td>Agent 编排、工具连接、插件生态</td><td>不做可视化工作流画布，专注对话式创作与轻量配置；连接器先支持标准 HTTP 工具，避免平台过重。</td></tr>
+          <tr><td><strong>Raycast Store</strong></td><td>精选、安装、版本与审核的市场体验</td><td>资产采用不可变版本快照与安装计数；管理员可下架/恢复/精选；密钥不随插件传播。</td></tr>
+        </tbody>
+      </table>
+      <p class="small">定位差异：<strong>“一个能在单台云主机上跑起来、权限边界清楚的团队 AI 工作台”</strong>。不是通用模型聚合器，也不是重型低代码平台。</p>
+    </section>
+
+    <section id="users">
+      <div class="section-kicker">03 · Users & jobs</div>
+      <h2>目标用户与核心 Job-to-be-Done</h2>
+      <div class="grid-2">
+        <div class="card"><h3>产品 / 增长团队</h3><p class="small">需要把研究、实验设计、周报与复盘变成稳定产出；希望团队里的方法能被复用，而不是每次从零提示。</p><p><span class="pill pill-green">核心</span></p></div>
+        <div class="card"><h3>研发 / 技术负责人</h3><p class="small">希望用代码审查专家、连接器与安全沙箱验证想法；关心权限、审计与私有部署。</p><p><span class="pill">核心</span></p></div>
+        <div class="card"><h3>解决方案 / 交付团队</h3><p class="small">需要把行业 know-how 打包成专家或插件，交付给客户工作区，并控制版本与授权。</p><p><span class="pill">扩展</span></p></div>
+        <div class="card"><h3>平台管理员 / IT</h3><p class="small">需要统一模型接入、内容审核、用户支持与备份恢复，不读取用户私有会话。</p><p><span class="pill">治理</span></p></div>
+      </div>
+      <h3>关键 Job Stories</h3>
+      <ul>
+        <li>当我有一个模糊任务时，我想选择一个合适的专家并直接开始，而不是先研究提示词。</li>
+        <li>当团队形成一套方法时，我想把它发布成技能，让所有人绑定使用，并能看到版本。</li>
+        <li>当智能体需要查真实数据时，我想接一个 HTTP 连接器，凭据加密且不暴露给对话。</li>
+        <li>当同事做出好用的组合时，我想一键安装插件，而不是复制十段提示词。</li>
+        <li>当团队扩张时，我想确保成员只能看自己的工作区数据，会话默认私有，管理员可审计关键动作。</li>
+      </ul>
+    </section>
+
+    <section id="principles">
+      <div class="section-kicker">04 · Principles</div>
+      <h2>产品原则</h2>
+      <div class="grid-3">
+        <div class="card"><h3>01 低摩擦</h3><p class="small">首屏就是输入框；新建任务不超过一个动作；专家和技能在选择器中可见。</p></div>
+        <div class="card"><h3>02 可解释</h3><p class="small">工具调用、模型、Token、运行状态、发布版本都可见；演示模式明确标注，不假装有模型。</p></div>
+        <div class="card"><h3>03 安全默认</h3><p class="small">会话私有、租户 404、密钥不回传、插件安装不执行发布者代码、Docker 沙箱无网络。</p></div>
+        <div class="card"><h3>04 可组装</h3><p class="small">能力以资产为中心组织；专家、技能、连接器、插件共用一套生命周期。</p></div>
+        <div class="card"><h3>05 可运营</h3><p class="small">管理员能看用量、审核内容、重置密码；所有关键动作可审计。</p></div>
+        <div class="card"><h3>06 单机可跑</h3><p class="small">一个 app + 一个 sandbox + Caddy；数据落一个卷；不引入 Redis、对象存储或向量库。</p></div>
+      </div>
+    </section>
+
+    <section id="journey">
+      <div class="section-kicker">05 · Core journey</div>
+      <h2>核心用户旅程</h2>
+      <div class="diagram">注册 / 登录
+  → 自动创建「我的工作区」与通用助理
+  → 工作台输入任务，选择智能体 / 模型
+  → 流式对话；按需触发记忆、沙箱、连接器
+  → 结果沉淀为会话与记忆
+  → 把方法保存为技能、把方法组合为专家
+  → 连接第三方 HTTP API（密钥加密）
+  → 发布到插件市场（不可变版本）
+  → 其他工作区安装 / 收藏 / 使用
+  → 管理员审核、精选、下架；审计留痕</div>
+      <div class="callout"><strong>首次体验路径：</strong>登录演示账号 → 打开「Q4 激活率实验规划」→ 在输入框继续追问 → 打开「插件市场」安装一个技能/专家 → 到「专家」启用并开始新会话 → 在「记忆」添加一条团队事实 → 在「沙箱」运行一段代码。</div>
+    </section>
+
+    <section id="experience">
+      <div class="section-kicker">06 · Experience</div>
+      <h2>体验与界面设计</h2>
+      <p>视觉语言是“深夜工作室”：深色低噪背景、<code>#c8f768</code> 酸橙强调色、细边框、克制的动效。信息层级通过留白和字号建立，而不是堆叠卡片。桌面端采用 260px 常驻侧栏 + 中央工作区；移动端侧栏变为抽屉，聊天输入固定底部。</p>
+      <figure class="shot"><img src="./assets/home.png" alt="OrbitWork 工作台首页" /><figcaption>工作台：任务输入、智能体/模型选择、最近任务与能力市场入口。</figcaption></figure>
+      <div class="shot-row">
+        <figure class="shot" style="margin:0"><img src="./assets/chat.png" alt="对话界面" /><figcaption>对话：Markdown、工具卡片、模型与 Token 信息。</figcaption></figure>
+        <figure class="shot" style="margin:0"><img src="./assets/home-mobile.png" alt="移动端工作台" /><figcaption>390px 移动端。</figcaption></figure>
+      </div>
+      <h3>关键界面</h3>
+      <table>
+        <thead><tr><th>界面</th><th>信息架构</th><th>关键交互</th></tr></thead>
+        <tbody>
+          <tr><td>工作台</td><td>问候 / 模式 / 输入框 / 最近任务 / 市场卡片 / 用量</td><td>Enter 发送；智能体与模型下拉；快捷提示词；新建任务</td></tr>
+          <tr><td>对话</td><td>会话标题、智能体、模型、消息流、工具事件、输入框</td><td>流式输出、停止、复制、重命名、刷新恢复、Markdown 表格</td></tr>
+          <tr><td>智能体</td><td>角色卡片、能力徽章、编辑/删除、开始对话</td><td>创建时绑定技能/连接器、开关记忆/沙箱、选择模型</td></tr>
+          <tr><td>专家 / 技能 / 连接器</td><td>分类卡片、状态、版本、安装量、作者</td><td>创建草稿、编辑、发布、从市场安装、专家一键启用</td></tr>
+          <tr><td>插件市场</td><td>精选头图、类型筛选、搜索、排序、卡片</td><td>安装、收藏、详情快照、发布插件（选择能力打包）</td></tr>
+          <tr><td>记忆</td><td>工作区/智能体作用域、标签、搜索</td><td>新增/编辑/删除；模板；说明检索机制</td></tr>
+          <tr><td>沙箱</td><td>代码编辑器、模板、输出、隔离说明</td><td>运行、⌘/Ctrl+Enter、超时与错误提示</td></tr>
+          <tr><td>成员与设置</td><td>成员、邀请、角色、审计、模型与开关、改密</td><td>生成一次性邀请链接；角色变更；危险区说明</td></tr>
+          <tr><td>平台管理</td><td>统计、内容审核、用户、跨区审计</td><td>下架/恢复/精选、平台角色、重置密码；不可查看私有聊天</td></tr>
+        </tbody>
+      </table>
+    </section>
+
+    <section id="specs">
+      <div class="section-kicker">07 · Functional specs</div>
+      <h2>功能规格（已实现）</h2>
+      <h3>账户与工作区</h3>
+      <ul>
+        <li>邮箱 + 密码注册；密码使用 scrypt 加盐哈希；最少 12 位；登录后创建 14 天服务端会话（Cookie HttpOnly / SameSite=Lax）。</li>
+        <li>注册自动创建工作区、所有者成员关系与一个「通用助理」智能体。</li>
+        <li>支持多工作区切换、新建工作区；每个工作区独立成员、资产、会话、记忆、审计。</li>
+        <li>邀请链接一次性、72 小时过期；接受时要求登录邮箱与邀请邮箱一致；受邀角色不超过邀请人权限。</li>
+      </ul>
+      <h3>模型与对话</h3>
+      <ul>
+        <li>兼容 OpenAI Chat Completions 的任意网关；模型列表由 <code>LLM_MODELS</code> 配置，服务端拒绝未知模型。</li>
+        <li>流式 SSE；事件含 meta / delta / reasoning / tool / usage / done / error；运行记录可取消。</li>
+        <li>消息与 Token 用量落库；聊天标题首条消息自动生成；会话可重命名、归档、删除。</li>
+        <li>无 <code>LLM_API_KEY</code> 时进入演示模式并清晰标识，保证本地可完整体验。</li>
+      </ul>
+    </section>
+
+    <section id="agents">
+      <div class="section-kicker">08 · Agent workbench</div>
+      <h2>智能体：角色 + 能力边界</h2>
+      <p>智能体不是又一层 prompt 包装，而是可被团队复用的“能力配置单元”。创建时可选名称、描述、图标/颜色、系统提示词、默认模型、技能、连接器，以及两个关键开关：</p>
+      <div class="grid-2">
+        <div class="card"><h3>长期记忆</h3><p class="small">开启后，系统注入与当前输入匹配（关键词）的最近记忆，并提供 <code>save_memory</code> 工具。关闭后该智能体完全无记忆上下文。</p></div>
+        <div class="card"><h3>代码沙箱</h3><p class="small">开启后可调用 <code>run_javascript</code>；工作区设置可整体关闭沙箱，优先级高于智能体设置。</p></div>
+      </div>
+      <p>运行时会组装：角色指令 + 工作区名称/日期/用户 + 已绑定技能指令 + 相关记忆 + 工具定义。工具循环最多 3 次模型调用；工具输出被标记为不可信外部数据。配置文件位于 <code>server/application/agent-runtime.ts</code>。</p>
+    </section>
+
+    <section id="memory">
+      <div class="section-kicker">09 · Memory</div>
+      <h2>记忆：显式、可编辑、可删除</h2>
+      <p>记忆被设计为团队可治理的“事实卡”，而不是模型自行积累的不可见上下文。每条记忆有标题、内容、作用域（工作区 / 指定智能体）、标签和作者。</p>
+      <ul>
+        <li>检索：按当前输入的关键词做 SQL <code>LIKE</code>，最多注入 6 条；不做向量检索，避免引入额外基础设施。</li>
+        <li>写入：用户手动添加；智能体在开启记忆时可调用 <code>save_memory</code>。</li>
+        <li>授权：成员只能编辑/删除自己创建的记录；成员不能给他人创建的智能体写记忆，避免提示注入。管理员可治理。</li>
+      </ul>
+      <div class="callout warn"><strong>已知边界：</strong>关键词检索不理解语义相近但用词不同的记忆；后续可接入 embedding 或 FTS5，但需要评估成本与迁移。</div>
+    </section>
+
+    <section id="sandbox">
+      <div class="section-kicker">10 · Sandbox</div>
+      <h2>沙箱：能算数，但不碰系统</h2>
+      <p>用于数据转换、算法验证和小型计算，不是通用代码执行云。生产路径是 <strong>文件队列 + 独立 worker 容器</strong>：</p>
+      <div class="grid-3">
+        <div class="card"><h3>无网络</h3><p class="small">sandbox 容器 <code>network_mode: none</code>；与 app 不共享网络，代码无法访问内网 API 或互联网。</p></div>
+        <div class="card"><h3>无凭据</h3><p class="small">容器不挂载数据库、不注入 APP_SECRET / API Key；只挂载代码队列卷。</p></div>
+        <div class="card"><h3>资源上限</h3><p class="small">只读根文件系统、非 root、cap_drop ALL、128 PID、256 MB、0.5 CPU、6 秒超时、24KB 输出。</p></div>
+      </div>
+      <figure class="shot"><img src="./assets/sandbox.png" alt="沙箱页面" /><figcaption>代码沙箱：模板、运行结果、隔离边界说明。</figcaption></figure>
+    </section>
+
+    <section id="assets">
+      <div class="section-kicker">11 · Capability assets</div>
+      <h2>专家、技能、连接器</h2>
+      <div class="grid-3">
+        <div class="card"><div class="kicker">Expert</div><h3>专家</h3><p class="small">封装角色、方法、系统提示词与推荐模型。安装后可“启用”为智能体并立刻对话。专家不是模型微调，而是可版本化的角色模板。</p></div>
+        <div class="card"><div class="kicker">Skill</div><h3>技能</h3><p class="small">可复用的方法、流程与输出规范。绑定到智能体后注入系统上下文，适合研究简报、实验设计、代码审查清单。</p></div>
+        <div class="card"><div class="kicker">Connector</div><h3>连接器</h3><p class="small">标准 HTTP 工具：方法、URL、工具名、描述、JSON Schema 参数。凭据以 AES-256-GCM 加密；网络层做 SSRF 防护。</p></div>
+      </div>
+      <h3>资产生命周期</h3>
+      <div class="diagram">draft（草稿，私有）
+   │ 发布：校验 payload + 生成不可变快照
+   ▼
+published（公开在市场）
+   │ 管理员下架                       │ 编辑
+   ▼                                  ▼
+suspended                      回到 draft（私有，需重新发布）</div>
+      <p>安装只接受 <code>published + public</code> 的资产，读取最新版本快照并在目标工作区复制为私有草稿。插件安装在一个事务内创建插件本体与最多 10 个子资产。删除已安装的克隆会同时清理安装记录并回退安装计数，允许重新安装。</p>
+    </section>
+
+    <section id="marketplace">
+      <div class="section-kicker">12 · Marketplace</div>
+      <h2>插件市场：能力流动，边界不动</h2>
+      <figure class="shot"><img src="./assets/market.png" alt="插件市场" /><figcaption>插件市场：精选、搜索、类型筛选、安装与收藏。</figcaption></figure>
+      <ul>
+        <li><strong>浏览：</strong>无需登录即可读取公开列表与详情；登录后可收藏/安装到自己的工作区。</li>
+        <li><strong>发布：</strong>成员可创建并发布专家/技能/连接器；管理员可关闭成员发布。插件由已有能力快照打包，最多 10 项。</li>
+        <li><strong>安全：</strong>连接器密钥不进入市场 payload、插件快照和安装克隆；安装者需自行配置。所有快照在安装时再次 schema 校验。</li>
+        <li><strong>治理：</strong>平台管理员可下架、恢复、精选；下架资产详情从市场 404，但已安装副本继续可用。</li>
+        <li><strong>运营：</strong>安装量与收藏数均为事务内计数；详情展示版本与作者。</li>
+      </ul>
+      <div class="callout"><strong>为什么用“快照 + 克隆”而不是引用：</strong>发布者后续修改或删除不应改变已安装方的行为；同时安装方拥有自己的草稿，可本地化调整，不污染公共版本。</div>
+    </section>
+
+    <section id="permissions">
+      <div class="section-kicker">13 · Governance</div>
+      <h2>权限模型</h2>
+      <table>
+        <thead><tr><th>能力</th><th>所有者</th><th>管理员</th><th>成员</th><th>平台管理员</th></tr></thead>
+        <tbody>
+          <tr><td>创建/使用自己的会话</td><td>✓</td><td>✓</td><td>✓</td><td>仅自己的工作区</td></tr>
+          <tr><td>读取他人会话</td><td>—</td><td>—</td><td>—</td><td>—（有意不提供）</td></tr>
+          <tr><td>创建智能体 / 技能 / 连接器</td><td>✓</td><td>✓</td><td>✓</td><td>✓</td></tr>
+          <tr><td>编辑他人的资产</td><td>✓</td><td>✓</td><td>—</td><td>✓（审核）</td></tr>
+          <tr><td>发布到市场</td><td>✓</td><td>✓</td><td>按工作区开关</td><td>✓</td></tr>
+          <tr><td>工作区设置 / 邀请 / 移除成员</td><td>✓</td><td>✓</td><td>—</td><td>—</td></tr>
+          <tr><td>平台角色 / 内容下架</td><td>—</td><td>—</td><td>—</td><td>✓</td></tr>
+        </tbody>
+      </table>
+      <h3>审计与隐私</h3>
+      <p>工作区审计覆盖成员、设置、资产、记忆、会话等动作；平台审计覆盖平台角色变更、密码重置、内容审核。平台管理员不提供读取用户会话的接口，避免“运维即偷窥”。</p>
+      <figure class="shot"><img src="./assets/settings.png" alt="工作区设置" /><figcaption>设置：模型、记忆/沙箱/发布策略、密码与部署信息。</figcaption></figure>
+    </section>
+
+    <section id="acceptance">
+      <div class="section-kicker">14 · Acceptance</div>
+      <h2>验收清单</h2>
+      <ul class="checklist">
+        <li><span class="tick">✓</span><div><strong>账户与权限：</strong>注册、登录、登出、会话过期、改密、邀请接受、按角色拒绝越权；自动化测试覆盖跨租户与同租户私有会话。</div></li>
+        <li><span class="tick">✓</span><div><strong>智能体会话：</strong>创建、模型白名单、SSE 流式、工具事件、取消、历史持久化、Token 统计、演示模式。</div></li>
+        <li><span class="tick">✓</span><div><strong>记忆：</strong>创建/检索/编辑/删除；智能体作用域授权；运行时注入。</div></li>
+        <li><span class="tick">✓</span><div><strong>沙箱：</strong>本地 HTTP worker 与生产文件队列；权限与超时验证；工作区开关。</div></li>
+        <li><span class="tick">✓</span><div><strong>市场：</strong>发布、安装、收藏、插件打包、版本快照、密钥不泄漏、下架/恢复、安装计数回退。</div></li>
+        <li><span class="tick">✓</span><div><strong>权限隔离：</strong>工作区 404、会话私有、成员记忆授权、平台管理员边界、Origin/JSON/速率限制。</div></li>
+        <li><span class="tick">✓</span><div><strong>工程：</strong>迁移 runner、WAL 备份、类型检查、23 项测试、生产构建 < 300ms。</div></li>
+        <li><span class="tick">✓</span><div><strong>部署：</strong>Dockerfile、Compose、Caddy TLS/SSE、沙箱网络隔离、环境变量样例、健康检查。</div></li>
+        <li><span class="tick todo">◷</span><div><strong>后续：</strong>真实模型联调（需提供 API Key）、Docker 本机实机启动（当前构建环境无容器守护进程）、生产 TLS 域名验证。</div></li>
+      </ul>
+      <div class="callout warn"><strong>测试数字：</strong>本仓库当前为 <strong>23/23</strong> 自动化测试通过（见 <code>npm test</code>）；产品的最终验收仍需要在目标环境配置真实 LLM Key，并执行一次 Docker Compose 启动与浏览器端到端冒烟。</div>
+    </section>
+
+    <section id="limits">
+      <div class="section-kicker">15 · Boundaries</div>
+      <h2>已知边界与路线图</h2>
+      <div class="grid-2">
+        <div class="card"><h3>V1 不包含</h3><ul class="small"><li>文件上传 / RAG / 知识库</li><li>定时任务与后台自动化</li><li>计费、套餐与组织配额</li><li>邮件验证与自助找回密码</li><li>OAuth / SSO / MFA</li><li>SSE 断线字节级续传</li><li>多实例水平扩展</li></ul></div>
+        <div class="card"><h3>建议路线</h3><ul class="small"><li>P0：真实模型联调、对象存储文件、定时任务</li><li>P1：PostgreSQL + Redis 迁移、多副本</li><li>P1：SSO / SCIM、组织级配额与审计导出</li><li>P2：连接器 OAuth、MCP 协议、插件签名与审核流</li><li>P2：记忆 embedding + 反馈闭环</li></ul></div>
+      </div>
+      <h3>运营指标建议</h3>
+      <p class="small">激活：注册后 24h 创建首个会话并完成一次工具调用；留存：7 日内再次发起会话；能力复用：安装资产后 7 日内被绑定到智能体；市场健康：发布→安装转化率、安装后 30 日留存、下架率。当前版本提供基础计数，未接入行为埋点。</p>
+      <hr />
+      <p class="small">文档版本 1.0 · 2026-11-25 · 与本仓库代码同步。架构细节、数据模型、威胁模型、部署与运维手册见 <a href="./architecture.html">架构与技术文档</a>。</p>
+    </section>
+  </main>
+</div>
+<script>
+  const links = [...document.querySelectorAll('.doc-side a[href^="#"]')];
+  const sections = links.map(a => document.querySelector(a.getAttribute('href'))).filter(Boolean);
+  const observer = new IntersectionObserver((entries) => {
+    for (const entry of entries) {
+      if (entry.isIntersecting) {
+        links.forEach(a => a.classList.toggle('active', a.getAttribute('href') === '#' + entry.target.id));
+      }
+    }
+  }, { rootMargin: '-20% 0px -70% 0px' });
+  sections.forEach(section => observer.observe(section));
+</script>
+</body>
+</html>

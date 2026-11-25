@@ -1,0 +1,10 @@
+{$SITE_ADDRESS} {
+	reverse_proxy app:8787 {
+		# SSE must never be buffered by the proxy
+		flush_interval -1
+	}
+	header {
+		-Server
+		X-Content-Type-Options nosniff
+	}
+}

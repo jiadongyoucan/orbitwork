@@ -1,0 +1,511 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>OrbitWork · 架构与技术文档</title>
+<meta name="description" content="OrbitWork 架构选型、数据模型、安全模型、智能体运行时、测试与阿里云 Docker 部署手册。" />
+<link rel="stylesheet" href="./doc.css" />
+</head>
+<body>
+<header class="doc-top">
+  <div class="doc-top-inner">
+    <a class="doc-brand" href="./index.html"><span class="doc-mark">◎</span>OrbitWork</a>
+    <nav>
+      <a href="./product.html">产品文档</a>
+      <a href="./architecture.html">架构文档</a>
+      <a href="./index.html">文档首页</a>
+      <a href="#deploy">部署</a>
+    </nav>
+  </div>
+</header>
+
+<div class="doc-shell">
+  <aside class="doc-side" aria-label="目录">
+    <div class="side-title">Architecture</div>
+    <a href="#overview" class="active">总览与约束</a>
+    <a href="#decisions">关键技术决策</a>
+    <a href="#c4">系统上下文 / 容器</a>
+    <a href="#modules">代码结构</a>
+    <a href="#data">数据模型</a>
+    <a href="#tenancy">租户与权限</a>
+    <a href="#auth">认证与会话</a>
+    <a href="#runtime">智能体运行时</a>
+    <a href="#sse">SSE 生命周期</a>
+    <a href="#market">市场与版本</a>
+    <a href="#sandbox">沙箱威胁模型</a>
+    <a href="#connector">连接器安全</a>
+    <a href="#api">API 参考</a>
+    <a href="#frontend">前端与构建</a>
+    <a href="#tests">测试策略</a>
+    <a href="#deploy">Docker / 阿里云</a>
+    <a href="#ops">运维与备份</a>
+    <a href="#scale">容量与演进</a>
+    <a href="#reviews">评审记录</a>
+    <a href="#debt">技术债</a>
+  </aside>
+
+  <main class="doc-main">
+    <div class="doc-hero">
+      <div class="doc-eyebrow">◎ Architecture & Engineering · v1.0</div>
+      <h1>架构与技术文档</h1>
+      <p class="doc-lead">模块化单体 + 独立沙箱 worker + SQLite WAL + Docker Compose。目标不是堆技术，而是在一台 ECS 上交付边界清晰、可测试、可运维的团队 AI 工作台。</p>
+      <div class="doc-meta"><span>Node.js 24</span><span>Fastify 5</span><span>React 19</span><span>node:sqlite</span><span>Docker Compose</span><span>23 tests</span></div>
+      <div class="doc-actions">
+        <a class="btn btn-dark" href="./product.html">阅读产品文档 →</a>
+        <a class="btn" href="#deploy">部署步骤</a>
+        <a class="btn" href="../README.md">README</a>
+      </div>
+    </div>
+
+    <section id="overview">
+      <div class="section-kicker">01 · Context</div>
+      <h2>总览与约束</h2>
+      <p>OrbitWork v1 是一个<strong>单节点、可私有化</strong>的 Web 应用。设计约束按优先级排序：</p>
+      <div class="grid-3">
+        <div class="card"><h3>低运维成本</h3><p class="small">一个 ECS、一个数据卷、一个 Compose 文件；不要求 RDS、Redis、对象存储或 K8s。</p></div>
+        <div class="card"><h3>租户边界</h3><p class="small">所有对象查询带 workspace_id；会话再带 user_id；越权返回 404。</p></div>
+        <div class="card"><h3>安全默认</h3><p class="small">密钥不回流、插件不执行代码、沙箱无网络、管理员不读私有会话。</p></div>
+        <div class="card"><h3>可测试</h3><p class="small">Fastify inject + node:test，不依赖浏览器、网络或外部数据库。</p></div>
+        <div class="card"><h3>可演进</h3><p class="small">domain / application / infrastructure / http 分层；SQLite 可迁移到 PostgreSQL。</p></div>
+        <div class="card"><h3>交付速度</h3><p class="small">esbuild 全量构建约 150–300ms；无 Tailwind/Vite 运行时工具链。</p></div>
+      </div>
+      <div class="stat-row">
+        <div class="stat-box"><b>1</b><span>应用容器</span></div>
+        <div class="stat-box"><b>1</b><span>无网络沙箱容器</span></div>
+        <div class="stat-box"><b>0</b><span>外部数据库 / 缓存</span></div>
+        <div class="stat-box"><b>23</b><span>自动化测试</span></div>
+      </div>
+    </section>
+
+    <section id="decisions">
+      <div class="section-kicker">02 · ADR</div>
+      <h2>关键技术决策</h2>
+      <table>
+        <thead><tr><th>决策</th><th>选择</th><th>理由与代价</th></tr></thead>
+        <tbody>
+          <tr><td>架构风格</td><td>模块化单体</td><td>单机部署最小化；比微服务少 10+ 个运维面。代价：需要靠代码边界与测试维持纪律。</td></tr>
+          <tr><td>数据库</td><td><code>node:sqlite</code> + WAL</td><td>零外部依赖、备份简单、ACID。代价：单写者、水平扩展受限。</td></tr>
+          <tr><td>认证</td><td>不透明会话 + SHA-256</td><td>可即时撤销、无 JWT 密钥轮换问题。代价：每请求一次 DB 查询（已索引）。</td></tr>
+          <tr><td>前端</td><td>React SPA + esbuild</td><td>构建快、控制力强。代价：没有 SSR/SEO，不适用于公开内容站。</td></tr>
+          <tr><td>LLM</td><td>OpenAI 兼容网关</td><td>可替换供应商，兼容 DeepSeek/Qwen/vLLM。代价：仅覆盖 Chat Completions 语义。</td></tr>
+          <tr><td>沙箱</td><td>文件队列 + network:none worker</td><td>无共享网络、无 Docker socket、无凭据。代价：仅串行、需共享卷、延迟约 120ms 轮询。</td></tr>
+          <tr><td>市场</td><td>统一 assets 聚合 + 版本快照</td><td>四种资产共用生命周期与 UI；安装不受发布者后续修改影响。代价：payload 多态需要严格 schema。</td></tr>
+        </tbody>
+      </table>
+    </section>
+
+    <section id="c4">
+      <div class="section-kicker">03 · C4</div>
+      <h2>系统上下文与容器</h2>
+      <h3>Context</h3>
+      <div class="diagram">┌─────────────┐       HTTPS / SSE       ┌──────────────────────────────┐
+│ 团队成员     │ ──────────────────────► │ OrbitWork Web App            │
+│ 管理员       │ ◄────────────────────── │ 会话 / 智能体 / 市场 / 管理    │
+└─────────────┘                         └──────────────┬───────────────┘
+                                                       │ OpenAI-compatible
+                                                       ▼
+                                            ┌────────────────────┐
+                                            │ LLM Gateway         │
+                                            │ DeepSeek/Qwen/...   │
+                                            └────────────────────┘
+                                                       ▲
+                                            ┌──────────┴─────────┐
+                                            │ 第三方 HTTP API     │
+                                            │ 连接器（可选）       │
+                                            └────────────────────┘</div>
+      <h3>Containers</h3>
+      <div class="arch-grid">
+        <div class="arch-box"><b>Caddy</b><span>80/443 · 自动 TLS · 反向代理 · SSE flush_interval -1 · 不在应用内终止 TLS</span></div>
+        <div class="arch-box"><b>App (Node 24)</b><span>Fastify · SPA 静态资源 · SQLite WAL 卷 · /jobs 队列卷 · 非 root</span></div>
+        <div class="arch-box"><b>Sandbox Worker</b><span>network:none · 只读根 · cap_drop ALL · 256MB/0.5CPU/128 PID · 文件队列</span></div>
+      </div>
+      <pre><code>Internet :80/:443
+   │
+ Caddy ── HTTP ──► app:8787
+                      │  /app/.data/orbitwork.db (named volume)
+                      │  /jobs/inbox,outbox (named volume)
+                      ▼
+               sandbox: none (no network)
+                      └── child node --permission → /tmp</code></pre>
+    </section>
+
+    <section id="modules">
+      <div class="section-kicker">04 · Modules</div>
+      <h2>代码结构</h2>
+      <pre><code>server/
+  config.ts                 环境变量、模型白名单、鉴权 Zod
+  app.ts                    Fastify 组装、安全头、Origin/JSON 校验、错误映射
+  index.ts                  启动、优雅退出
+  seed.ts / seed-cli.ts     幂等种子（管理员、演示空间、市场资产）
+  backup.ts                 VACUUM INTO 备份 + 保留策略
+  domain/                   errors/RBAC、crypto、schemas（纯规则）
+  application/              agent-runtime（编排、工具循环、SSE 事件、取消）
+  infrastructure/           db + migrations、LLM gateway、connectors、sandbox client
+  http/context.ts           requireUser / requireWorkspace / audit / platformAudit
+  http/rate-limit.ts        IP + 身份固定窗口
+  http/routes/              auth, workspaces, agents, chats, memories, assets, admin, misc
+  sandbox-worker.ts         队列模式 + loopback HTTP 开发模式
+
+src/
+  pages/                    Landing, Auth, Home, Chat, Agents, Assets, Market,
+                            Memories, Sandbox, Members, Settings, Admin
+  components/               AppShell, UI primitives, Markdown, Icon
+  context/                  AuthContext, ToastContext
+  lib/                      API client, SSE parser, types, utils
+tests/                      domain.test.ts, api.test.ts</code></pre>
+      <p>依赖方向：<code>http → application → domain</code>。Domain 不依赖 Fastify/React；基础设施被 application 与 http 调用。没有为了“看起来分层”而引入 repository 接口，SQL 直接但统一带租户条件，并通过测试约束。</p>
+    </section>
+
+    <section id="data">
+      <div class="section-kicker">05 · Data</div>
+      <h2>数据模型</h2>
+      <pre><code>users ──&lt; sessions
+  │
+  └──&lt; memberships &gt;── workspaces ──&lt; invites
+                         │
+        ┌────────────────┼──────────────────┐
+        │                │                  │
+      agents           chats              assets ──&lt; asset_versions
+        │                │                  ├──&lt; asset_installs
+        └──&lt; memories    ├──&lt; messages      └──&lt; asset_stars
+                         └──&lt; runs
+workspaces ──&lt; audit_logs
+users ──&lt; platform_audit_logs</code></pre>
+      <h3>核心表</h3>
+      <table>
+        <thead><tr><th>表</th><th>关键字段 / 约束</th><th>说明</th></tr></thead>
+        <tbody>
+          <tr><td><code>workspaces</code></td><td>owner_id, settings_json, slug unique</td><td>租户根；settings 含默认模型、发布/记忆/沙箱开关</td></tr>
+          <tr><td><code>memberships</code></td><td>PK(workspace_id,user_id), role check</td><td>owner/admin/member</td></tr>
+          <tr><td><code>chats</code></td><td>workspace_id, user_id, agent_id, model</td><td>会话私有于 user_id；按 updated_at 索引</td></tr>
+          <tr><td><code>messages</code></td><td>chat_id, role, tool_events_json, status, usage</td><td>用户/助手消息；部分取消也保留</td></tr>
+          <tr><td><code>runs</code></td><td>chat_id, status, tokens, started_at</td><td>运行审计与卡死恢复；启动时 running→cancelled</td></tr>
+          <tr><td><code>memories</code></td><td>scope, agent_id, created_by</td><td>工作区/智能体记忆；成员只能改自己创建的</td></tr>
+          <tr><td><code>assets</code></td><td>kind, payload_json, status, visibility, source_asset_id</td><td>统一资产聚合；安装克隆带来源</td></tr>
+          <tr><td><code>asset_versions</code></td><td>UNIQUE(asset_id,version), snapshot_json, content_hash</td><td>不可变发布快照</td></tr>
+          <tr><td><code>asset_installs</code></td><td>UNIQUE(workspace_id,asset_id), installed_asset_id FK CASCADE</td><td>安装记录；删除克隆可重装</td></tr>
+          <tr><td><code>platform_audit_logs</code></td><td>actor_id, action, target</td><td>跨工作区管理动作</td></tr>
+        </tbody>
+      </table>
+      <h3>迁移与完整性</h3>
+      <ul>
+        <li>迁移按版本号在单个事务内执行，<code>PRAGMA user_version</code> 记录当前版本，当前为 v2。</li>
+        <li><code>PRAGMA foreign_keys=ON</code>、<code>busy_timeout=5000</code>、WAL。</li>
+        <li>文件备份使用 <code>VACUUM INTO</code>，禁止对 WAL 数据库直接 <code>cp</code>；测试验证备份可重新打开且数据完整。</li>
+      </ul>
+    </section>
+
+    <section id="tenancy">
+      <div class="section-kicker">06 · Isolation</div>
+      <h2>租户与权限不变量</h2>
+      <div class="check-grid">
+        <div class="card"><h3>I1 工作区先行</h3><p class="small">每个租户对象的读取/修改都显式带 <code>workspace_id</code>；子资源查询同时带 <code>id</code> 与租户。</p></div>
+        <div class="card"><h3>I2 404 优先</h3><p class="small">无成员关系或对象跨租户时返回 404，避免暴露存在性。</p></div>
+        <div class="card"><h3>I3 会话私有</h3><p class="small">chat 读取/列表/流式/删除都带 <code>user_id</code>；overview 也只统计自己的会话。</p></div>
+        <div class="card"><h3>I4 对象级授权</h3><p class="small">成员只能改自己创建的 agent/asset/memory；管理员/所有者可治理。</p></div>
+        <div class="card"><h3>I5 角色上限</h3><p class="small">邀请角色不能超过邀请人；所有者不可被降级/移除；最后一名平台管理员不可降级。</p></div>
+        <div class="card"><h3>I6 平台边界</h3><p class="small">平台管理员可审核内容与重置密码，但没有读取用户会话的 API。</p></div>
+      </div>
+      <p>测试包含“外部工作区访问全部 404”“同工作区另一个成员读不到私有聊天”“overview 不泄漏他人会话标题”“成员不能改他人智能体记忆”等回归项。</p>
+    </section>
+
+    <section id="auth">
+      <div class="section-kicker">07 · AuthN</div>
+      <h2>认证与会话</h2>
+      <ul>
+        <li><strong>密码：</strong>scrypt，16-byte salt，64-byte 派生；常量时间比较；最少 12 位。哈希格式 <code>scrypt$salt$hash</code>。</li>
+        <li><strong>会话：</strong>32 字节随机令牌，数据库只存 SHA-256；Cookie <code>orbit_session</code> HttpOnly/SameSite=Lax/Secure（生产）；14 天绝对过期。</li>
+        <li><strong>登出/改密：</strong>删除当前/其他会话；管理员重置会删除该用户全部会话。</li>
+        <li><strong>CSRF：</strong>SameSite + Origin 白名单 + JSON Content-Type；无 token 方案，避免 SPA 额外复杂度。</li>
+        <li><strong>速率：</strong>IP 30/10min + 账号 8/10min 登录；注册 5/10min；聊天 12/min；沙箱 10/min。账号键独立于 IP，抗 IP 轮换。</li>
+        <li><strong>代理信任：</strong>默认关闭；Compose 只信任 loopback / link-local / 私网地址（Caddy 所在网络），不信任公网直连的 XFF。</li>
+      </ul>
+    </section>
+
+    <section id="runtime">
+      <div class="section-kicker">08 · Runtime</div>
+      <h2>智能体运行时</h2>
+      <pre><code>POST /api/w/:ws/chats/:id/messages
+  │ requireWorkspace + chat.user_id + rate limit
+  │ 持久化 user message + run(running)
+  │ hijack → SSE
+  ├─ meta { runId, model, demo }
+  ├─ buildSystemPrompt(agent, skills, memories, workspace)
+  ├─ model call #1  ──stream──► delta / reasoning
+  ├─ tool_calls? execute → tool event → tool message → model #2..#3
+  ├─ persist assistant message, usage, run(complete/error/cancelled)
+  └─ SSE done | error</code></pre>
+      <h3>提示词组装</h3>
+      <p>系统提示 = 智能体名称/角色指令 + 工作区名称/日期/用户 + 已绑定技能指令 + 相关记忆（最多 6 条）+ 行为准则。工具输出被标记为不可信外部数据；模型最多 3 轮工具循环，防止成本失控。</p>
+      <h3>工具</h3>
+      <ul>
+        <li><code>save_memory</code> / <code>search_memories</code>：仅在智能体开启记忆且工作区未关闭记忆时暴露。</li>
+        <li><code>run_javascript</code>：仅在智能体与工作区均开启沙箱时暴露；调用独立 worker。</li>
+        <li>连接器：每个绑定连接器生成一个函数工具，schema 来自资产 payload。</li>
+      </ul>
+      <h3>失败与取消</h3>
+      <p>运行前写 run 记录；取消调用 <code>POST /runs/:id/cancel</code> 触发 AbortController；客户端断开同样中止。无论成功/失败/取消，finally 都会落库助手消息（允许空内容 + 状态），并清理运行表。服务重启时所有 <code>running</code> 被置为 cancelled，避免会话永久锁死。</p>
+    </section>
+
+    <section id="sse">
+      <div class="section-kicker">09 · Streaming</div>
+      <h2>SSE 生命周期与边界</h2>
+      <table>
+        <thead><tr><th>事件</th><th>负载</th><th>用途</th></tr></thead>
+        <tbody>
+          <tr><td><code>meta</code></td><td>runId, model, demo</td><td>客户端获得取消句柄、显示模式与模型</td></tr>
+          <tr><td><code>delta</code></td><td>text</td><td>增量正文</td></tr>
+          <tr><td><code>reasoning</code></td><td>text</td><td>推理模型的可折叠过程（可选）</td></tr>
+          <tr><td><code>tool</code></td><td>event { name,input,output,status,durationMs }</td><td>工具卡片</td></tr>
+          <tr><td><code>usage</code></td><td>input/output</td><td>Token 统计</td></tr>
+          <tr><td><code>done</code> / <code>error</code></td><td>messageId / message</td><td>终止信号</td></tr>
+        </tbody>
+      </table>
+      <p>每个事件带单调 <code>id</code>。V1 <strong>不支持断线续传</strong>：客户端重连后重新 GET 会话，读取已落库的部分消息。Caddy 配置 <code>flush_interval -1</code> 防止代理缓冲。SSE 不压缩，避免中间层积压。</p>
+    </section>
+
+    <section id="market">
+      <div class="section-kicker">10 · Marketplace</div>
+      <h2>市场、版本与安装完整性</h2>
+      <pre><code>publish:
+  validate(kind,payload) → snapshot JSON → sha256 → asset_versions
+  assets.status=published, visibility=public
+
+install:
+  source must be published+public
+  read latest asset_versions snapshot
+  re-validate snapshot (never trust request body)
+  transaction:
+    clone asset (status=draft, visibility=private)
+    if plugin: clone ≤10 children
+    insert asset_installs(source_version)
+    increment installs
+
+delete clone:
+  remove install row + decrement source installs (same tx)
+  → reinstall works</code></pre>
+      <p>连接器 secrets 永远不进入 <code>payload_json</code>：仅通过 <code>secrets</code> 字段写入 <code>secrets_encrypted</code>（AES-256-GCM）。市场序列化再次剥离 <code>headers</code>；插件快照中的连接器同样无凭据。安装时源资产 secrets 为零。</p>
+    </section>
+
+    <section id="sandbox">
+      <div class="section-kicker">11 · Sandbox</div>
+      <h2>沙箱威胁模型</h2>
+      <div class="arch-grid">
+        <div class="arch-box"><b>入口</b><span>仅 app 写入 /jobs/inbox；job 含 code 与 id</span></div>
+        <div class="arch-box"><b>执行</b><span>worker 串行取任务；child node --permission；临时目录只读输入</span></div>
+        <div class="arch-box"><b>出口</b><span>/jobs/outbox JSON；stdout/stderr 截断；6 秒超时</span></div>
+      </div>
+      <h3>隔离控制</h3>
+      <ul>
+        <li>Compose：<code>network_mode: none</code>、<code>read_only: true</code>、<code>tmpfs /tmp</code>、<code>cap_drop: ALL</code>、<code>no-new-privileges</code>、pids 128、memory 256m、cpus 0.5。</li>
+        <li>容器不挂载数据库；不注入 APP_SECRET、LLM Key、SANDBOX_TOKEN（队列模式完全不需要）。</li>
+        <li>Node 权限模型：仅允许读取 /tmp 与一次性目录；禁止 fs 写入、child_process、worker、addon 等（Node permission model）。</li>
+        <li>应用层：代码 ≤20KB、用户级 10 次/分钟、工作区开关、全局串行。</li>
+      </ul>
+      <h3>残余风险</h3>
+      <p>worker 自身是可信代码；Node 权限模型不等于内核级沙箱，内核漏洞逃逸仍是理论风险。高合规场景建议替换为 Firecracker/gVisor 或独立节点执行。V1 不提供 Python/npm 包能力。</p>
+    </section>
+
+    <section id="connector">
+      <div class="section-kicker">12 · Connectors</div>
+      <h2>连接器安全</h2>
+      <ul>
+        <li><strong>协议：</strong>仅 HTTP/HTTPS；GET 参数拼接 query，POST 发送 JSON；12 秒超时；不跟随重定向。</li>
+        <li><strong>SSRF：</strong>禁止 localhost、私网、link-local、云元数据、IPv4/IPv6 私网；域名解析后再次校验；生产默认不可访问内网（<code>ALLOW_PRIVATE_CONNECTORS=false</code>）。</li>
+        <li><strong>凭据：</strong>AES-256-GCM，密钥由 APP_SECRET 派生；API 只返回 key 名；市场与安装快照不含密钥。</li>
+        <li><strong>输出：</strong>响应上限 100KB，工具输出再截断 8KB；作为不可信数据注入。</li>
+        <li><strong>配置：</strong>工具名限制为函数名格式；参数 JSON Schema 由发布者提供并校验。</li>
+      </ul>
+    </section>
+
+    <section id="api">
+      <div class="section-kicker">13 · API</div>
+      <h2>API 参考（摘要）</h2>
+      <table>
+        <thead><tr><th>方法 / 路径</th><th>权限</th><th>说明</th></tr></thead>
+        <tbody>
+          <tr><td><code>POST /api/auth/signup</code></td><td>公开 / 注册开关</td><td>创建用户、工作区、通用助理、会话</td></tr>
+          <tr><td><code>POST /api/auth/login</code></td><td>公开 + 限流</td><td>登录并设置 HttpOnly Cookie</td></tr>
+          <tr><td><code>GET /api/auth/me</code></td><td>登录</td><td>用户与工作区列表</td></tr>
+          <tr><td><code>GET /api/w/:ws/overview</code></td><td>成员</td><td>工作区统计；仅自己的最近会话/用量</td></tr>
+          <tr><td><code>GET/POST /api/w/:ws/agents</code></td><td>成员</td><td>智能体列表/创建；技能与连接器必须同租户</td></tr>
+          <tr><td><code>POST /api/w/:ws/chats/:id/messages</code></td><td>会话所有者</td><td>SSE 流式运行</td></tr>
+          <tr><td><code>POST /api/w/:ws/runs/:runId/cancel</code></td><td>运行所有者</td><td>取消当前运行</td></tr>
+          <tr><td><code>GET/POST /api/w/:ws/memories</code></td><td>成员</td><td>记忆检索/创建；对象级授权</td></tr>
+          <tr><td><code>GET /api/market</code></td><td>公开</td><td>公开市场列表（已清洗 secrets/headers）</td></tr>
+          <tr><td><code>POST /api/w/:ws/assets/:id/install</code></td><td>成员</td><td>从不可变快照安装</td></tr>
+          <tr><td><code>POST /api/w/:ws/assets/:id/publish</code></td><td>作者/管理员</td><td>校验并生成版本快照</td></tr>
+          <tr><td><code>GET /api/w/:ws/members</code></td><td>成员</td><td>成员与邀请列表</td></tr>
+          <tr><td><code>GET /api/admin/stats</code></td><td>平台管理员</td><td>全平台统计；不读私有聊天内容</td></tr>
+          <tr><td><code>POST /api/w/:ws/sandbox/run</code></td><td>成员 + 工作区开关</td><td>手动运行 JS</td></tr>
+        </tbody>
+      </table>
+      <p class="small">错误格式：<code>{ error: { code, message, details? } }</code>。校验错误返回 400；未登录 401；越权 403；跨租户 404；冲突 409；限流 429。</p>
+    </section>
+
+    <section id="frontend">
+      <div class="section-kicker">14 · Frontend</div>
+      <h2>前端与构建</h2>
+      <ul>
+        <li>React 19 + React Router 7；单页应用；服务端由 Fastify 托管 <code>dist/public</code>。</li>
+        <li>esbuild 单次 build：TSX bundle + CSS，约 150–300ms；无 Vite dev server 依赖，NPM 脚本更少。</li>
+        <li>设计系统为手写 CSS：深色 token、卡片、按钮、表格、Markdown 排版；响应式断点 620/900/1100。</li>
+        <li>认证上下文负责 <code>me</code> 与工作区切换；401 事件触发全局登出；Toast 处理错误。</li>
+        <li>Markdown 渲染不启用 raw HTML，阻断外部图片；链接新窗口 + noopener。SSE 使用 fetch reader 解析，POST 可带 Cookie。</li>
+        <li>构建产物：<code>dist/public/app.js</code>、<code>app.css</code>、<code>index.html</code>。</li>
+      </ul>
+    </section>
+
+    <section id="tests">
+      <div class="section-kicker">15 · Quality</div>
+      <h2>测试策略与结果</h2>
+      <table>
+        <thead><tr><th>层级</th><th>工具</th><th>覆盖</th></tr></thead>
+        <tbody>
+          <tr><td>Domain unit</td><td>node:test</td><td>密码、AES-GCM 篡改、RBAC、SSRF、payload/plugin schema、文件 DB 迁移与备份</td></tr>
+          <tr><td>API integration</td><td>Fastify inject</td><td>注册/登录/登出；跨租户 404；同租户聊天隐私；邀请/RBAC；市场发布/安装/插件；密钥清洗；删除后重装；记忆授权；IP 轮换锁定；SSE 持久化；管理员审核；输入校验；stale run</td></tr>
+          <tr><td>Build</td><td>tsc + esbuild</td><td><code>npx tsc --noEmit</code> 零错误；生产 bundle 构建</td></tr>
+          <tr><td>Manual UI</td><td>Headless Chrome + CDP</td><td>1440px / 390px 截图；登录、首页、对话流、市场安装、沙箱执行、管理台</td></tr>
+        </tbody>
+      </table>
+      <pre><code>$ NODE_ENV=test npm test
+ℹ tests 23
+ℹ pass 20
+ℹ fail 0
+
+$ npx tsc --noEmit
+(no output)
+
+$ node scripts/build.mjs
+[build] done in ~200ms</code></pre>
+      <p class="small">测试使用内存 SQLite，不依赖外部服务；LLM 使用内置演示模式，因此 CI 无需 API Key。真实模型的工具循环需要在具备 Key 的环境做集成验收。</p>
+    </section>
+
+    <section id="deploy">
+      <div class="section-kicker">16 · Deployment</div>
+      <h2>Docker 本地与阿里云部署</h2>
+      <h3>本地一键启动</h3>
+      <pre><code>cp .env.example .env
+# 修改 APP_SECRET、SEED_ADMIN_PASSWORD、SEED_DEMO_PASSWORD
+docker compose up -d --build
+open http://localhost:8080
+docker compose logs -f app</code></pre>
+      <p>Compose 启动 3 个服务：<code>app</code>、<code>sandbox</code>、<code>caddy</code>。只有 Caddy 暴露 8080/8443（生产改为 80/443）。sandbox 无网络，仅共享 <code>/jobs</code> 卷。app 健康后才启动 Caddy。</p>
+      <h3>阿里云 ECS</h3>
+      <div class="grid-2">
+        <div class="card"><h3>最小规格</h3><ul class="small"><li>ECS 2 vCPU / 4 GB（最低 2 GB）</li><li>Ubuntu 24.04 LTS，磁盘 40 GB ESSD</li><li>安全组仅开放 22、80、443</li><li>Docker Engine 24+ / Compose v2</li><li>一个域名解析到 ECS（大陆需备案）</li></ul></div>
+        <div class="card"><h3>生产环境变量</h3><ul class="small"><li><code>APP_ORIGIN=https://your.domain</code></li><li><code>SITE_ADDRESS=your.domain</code></li><li><code>COOKIE_SECURE=true</code></li><li><code>APP_SECRET</code> ≥32 随机字符</li><li><code>SEED_DEMO=false</code>，强密码</li><li><code>LLM_API_KEY</code> 与模型列表</li></ul></div>
+      </div>
+      <pre><code># ECS
+sudo apt update &amp;&amp; sudo apt install -y docker.io docker-compose-v2 git
+sudo usermod -aG docker $USER &amp;&amp; newgrp docker
+git clone &lt;repo&gt; orbitwork &amp;&amp; cd orbitwork
+cp .env.example .env &amp;&amp; vim .env
+docker compose up -d --build
+curl -f https://your.domain/api/health</code></pre>
+      <div class="callout"><strong>TLS：</strong>Caddy 读取 <code>SITE_ADDRESS</code>；填域名并映射 80/443 后自动签发证书。<code>SITE_ADDRESS=:80</code> 仅用于本地 HTTP。<code>COOKIE_SECURE</code> 必须与 HTTPS 同步，否则浏览器不会回传会话 Cookie。</div>
+      <h3>部署检查</h3>
+      <ul class="checklist">
+        <li><span class="tick">✓</span><div>三个容器 healthy；<code>/api/health</code> 返回 ok</div></li>
+        <li><span class="tick">✓</span><div>首次启动日志不含默认弱密码；市场种子数据可选</div></li>
+        <li><span class="tick">✓</span><div>登录后新建会话，流式回复与取消可用</div></li>
+        <li><span class="tick">✓</span><div>沙箱运行 <code>console.log(1+1)</code> 返回 2；网络访问被隔离</div></li>
+        <li><span class="tick">✓</span><div>邀请第二账号，验证无法读取对方会话；平台管理员可审核</div></li>
+        <li><span class="tick">✓</span><div>备份 cron 成功生成 .db 并复制到 OSS</div></li>
+      </ul>
+    </section>
+
+    <section id="ops">
+      <div class="section-kicker">17 · Operations</div>
+      <h2>运维、备份与恢复</h2>
+      <h3>备份</h3>
+      <pre><code># 立即备份（容器内）
+docker compose run --rm app node dist/backup.js
+# 宿主机定时任务（示例：每天 03:20）
+20 3 * * * cd /opt/orbitwork &amp;&amp; docker compose run --rm app node dist/backup.js
+# 同步到阿里云 OSS（示例，需安装 ossutil）
+ossutil cp -r /var/lib/docker/volumes/orbitwork_orbit_data/_data/backups oss://your-bucket/orbitwork/</code></pre>
+      <p>备份使用 <code>VACUUM INTO</code>，生成一致性快照；默认保留 14 天。不要直接复制 WAL 文件。</p>
+      <h3>恢复</h3>
+      <pre><code>docker compose stop app caddy
+docker run --rm -v orbitwork_orbit_data:/data -v $PWD:/backup alpine \
+  sh -c "cp /backup/orbitwork-YYYY-MM-DD.db /data/orbitwork.db"
+docker compose up -d</code></pre>
+      <h3>升级</h3>
+      <pre><code>git pull
+docker compose up -d --build
+# 迁移在启动时自动执行；失败则回滚镜像并恢复数据库备份</code></pre>
+      <h3>可观测性</h3>
+      <ul>
+        <li>应用日志：Docker json-file；建议接入 Aliyun SLS，按 requestId/runId 检索。</li>
+        <li>健康检查：app 与 sandbox 的 Compose healthcheck；Caddy 依赖 app healthy。</li>
+        <li>关键指标建议：5xx 率、登录失败率、SSE 中断率、运行时长 P95、沙箱超时、安装成功率。</li>
+        <li>安全：仅 80/443 暴露；SSH 限制源 IP；定期轮换 APP_SECRET 与管理员密码；不要把 .env 提交仓库。</li>
+      </ul>
+    </section>
+
+    <section id="scale">
+      <div class="section-kicker">18 · Scale</div>
+      <h2>容量与演进</h2>
+      <ul>
+        <li><strong>当前容量：</strong>单节点 ≤200 活跃用户；SQLite WAL 单写者；LLM 延迟远大于 DB 写，实际瓶颈在模型与沙箱。</li>
+        <li><strong>纵向：</strong>4 vCPU / 8 GB 可覆盖多数团队；SSE 长连接需注意 Caddy/内核 fd 上限。</li>
+        <li><strong>横向：</strong>迁移 PostgreSQL（schema 可平移），Redis 存 session/rate limit，对象存储放备份；sandbox 改为独立队列消费者；SLB 前置多 app。</li>
+        <li><strong>多租户：</strong>所有表已有 workspace_id；未来可加 org/team 层级与配额。</li>
+      </ul>
+      <div class="callout warn"><strong>不要直接多副本：</strong>SQLite 卷与内存限流均为单实例假设；无共享存储时启动两副本会导致数据分叉。需要先完成 PostgreSQL/Redis 改造。</div>
+    </section>
+
+    <section id="reviews">
+      <div class="section-kicker">19 · Review gates</div>
+      <h2>评审记录</h2>
+      <table>
+        <thead><tr><th>Gate</th><th>范围</th><th>结论</th><th>处置</th></tr></thead>
+        <tbody>
+          <tr><td>G0</td><td>架构、租户、沙箱、范围</td><td>条件通过 / 缩减 v1</td><td>采纳：不可变版本、安装校验、Docker 隔离、迁移、备份、SSE 生命周期等</td></tr>
+          <tr><td>G1</td><td>后端安全、市场、运行时</td><td>NO-GO → 修复 → GO</td><td>修复市场凭据泄漏、overview 越权、IP 轮换限流、安装孤儿、stale run、记忆授权、沙箱网络、平台审计与迁移兼容；23 项回归测试</td></tr>
+          <tr><td>G2</td><td>产品体验 / 桌面 &amp; 移动</td><td>条件通过 → 已修复</td><td>修正 @/slash 误导、示例消息标识、市场安装去向/权限、错误态、移动表格、焦点与对比度</td></tr>
+          <tr><td>G3</td><td>测试 / 构建 / 质量</td><td>条件通过 → 已修复</td><td>干净 npm ci 后 tsc/build/23 测试通过；修复开发沙箱、4xx、seed 幂等、工具输出上限</td></tr>
+          <tr><td>G4</td><td>Docker / 阿里云</td><td>条件通过 → 已修复</td><td>修复恢复 WAL/权限、占位密钥、日志轮转、超时、迁移孤儿、.dockerignore；preflight 自检</td></tr>
+          <tr><td>G5</td><td>最终验收</td><td>条件通过</td><td>无确认的阻断代码缺陷；23/23 测试、类型与构建通过。Docker、Caddy、真实模型与队列隔离需在目标环境冒烟</td></tr>
+        </tbody>
+      </table>
+      <p class="small">G1 的完整发现与修复记录见仓库 <code>docs/REVIEW.md</code>。独立 reviewer 在修复后复查关键路径，避免“自己审自己”。</p>
+    </section>
+
+    <section id="debt">
+      <div class="section-kicker">20 · Debt</div>
+      <h2>技术债与风险登记</h2>
+      <table>
+        <thead><tr><th>风险</th><th>影响</th><th>缓解 / 计划</th></tr></thead>
+        <tbody>
+          <tr><td>单 APP_SECRET、无密钥版本</td><td>轮换即导致连接器密钥不可解</td><td>引入 key_version/keyring；轮换前迁移</td></tr>
+          <tr><td>内存限流</td><td>重启清零；多副本不一致</td><td>单实例可接受；横向扩展时迁 Redis</td></tr>
+          <tr><td>SSE 无续传</td><td>断网后需刷新读取部分结果</td><td>消息已落库；v2 可加事件表/Last-Event-ID 重放</td></tr>
+          <tr><td>SQLite 单写者</td><td>高并发写入排队</td><td>WAL + 短事务；规模上升迁 PostgreSQL</td></tr>
+          <tr><td>连接器出口未按租户白名单</td><td>SSRF 基线之外的滥用</td><td>网关出口代理/域名 allowlist（v2）</td></tr>
+          <tr><td>无文件 / RAG</td><td>不能直接分析上传文档</td><td>对象存储 + 解析 + 分块（P0 路线）</td></tr>
+          <tr><td>无邮件验证/自助找回</td><td>依赖管理员支持</td><td>接入 SMTP / 阿里云邮件推送</td></tr>
+          <tr><td>Docker 实机未在本机构建</td><td>目标环境首次启动需验证</td><td>交付 compose + 检查清单；在 Aliyun 执行冒烟</td></tr>
+        </tbody>
+      </table>
+      <hr />
+      <p class="small">文档版本 1.0 · 2026-11-25 · 代码仓库：<code>chat_ai/</code> · 产品文档：<a href="./product.html">product.html</a> · 封面与快速开始：<a href="./index.html">index.html</a></p>
+    </section>
+  </main>
+</div>
+<script>
+  const links = [...document.querySelectorAll('.doc-side a[href^="#"]')];
+  const sections = links.map(a => document.querySelector(a.getAttribute('href'))).filter(Boolean);
+  const observer = new IntersectionObserver((entries) => {
+    for (const entry of entries) {
+      if (entry.isIntersecting) {
+        links.forEach(a => a.classList.toggle('active', a.getAttribute('href') === '#' + entry.target.id));
+      }
+    }
+  }, { rootMargin: '-20% 0px -70% 0px' });
+  sections.forEach(section => observer.observe(section));
+</script>
+</body>
+</html>

@@ -1,0 +1,46 @@
+{
+  "name": "orbitwork",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "OrbitWork — multi-tenant AI agent workspace, marketplace and extensibility platform",
+  "scripts": {
+    "dev": "node scripts/build.mjs && NODE_ENV=development APP_ORIGIN=http://127.0.0.1:8797 DB_PATH=.data/dev.db PORT=8797 SANDBOX_TMP_DIR=/tmp concurrently -k -n web,api,sbx -c magenta,cyan,yellow \"node scripts/build.mjs --watch --client-only\" \"tsx watch server/index.ts\" \"tsx watch server/sandbox-worker.ts\"",
+    "dev:api": "NODE_ENV=development APP_ORIGIN=http://127.0.0.1:8797 DB_PATH=.data/dev.db PORT=8797 tsx watch server/index.ts",
+    "dev:web": "node scripts/build.mjs --watch --client-only",
+    "build": "node scripts/build.mjs",
+    "start": "node dist/server.js",
+    "seed": "tsx server/seed-cli.ts",
+    "backup": "node dist/backup.js",
+    "test": "node --import tsx --test --test-concurrency=1 tests/*.test.ts",
+    "test:watch": "node --import tsx --test --watch tests/*.test.ts",
+    "typecheck": "tsc --noEmit",
+    "review:check": "npm run typecheck && npm test && npm run build",
+    "sandbox": "tsx server/sandbox-worker.ts"
+  },
+  "dependencies": {
+    "@fastify/cookie": "^11.0.2",
+    "@fastify/static": "^8.2.0",
+    "dotenv": "^16.6.1",
+    "fastify": "^5.4.0",
+    "lucide-react": "^0.511.0",
+    "react": "^19.1.0",
+    "react-dom": "^19.1.0",
+    "react-markdown": "^10.1.0",
+    "react-router-dom": "^7.6.2",
+    "remark-gfm": "^4.0.1",
+    "zod": "^3.25.56"
+  },
+  "devDependencies": {
+    "@types/node": "^24.0.0",
+    "@types/react": "^19.1.8",
+    "@types/react-dom": "^19.1.6",
+    "concurrently": "^9.1.2",
+    "esbuild": "^0.28.2",
+    "tsx": "^4.20.3",
+    "typescript": "^5.8.3"
+  },
+  "engines": {
+    "node": ">=24"
+  }
+}
