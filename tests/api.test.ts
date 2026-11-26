@@ -372,3 +372,26 @@ test('validation: malformed and oversized inputs return 400, not 500', async () 
   });
   assert.equal(wrongType.statusCode, 415);
 });
+
+test('chats: archive hides from the default list, restore returns it, delete removes it', async () => {
+  const alice = await signup('Archive Alice');
+  const created = await api<{ chat: { id: string; title: string } }>('POST', `/api/w/${alice.workspaceId}/chats`, alice.cookie, {});
+  const chatId = created.chat.id;
+
+  const archive = await call('PATCH', `/api/w/${alice.workspaceId}/chats/${chatId}`, alice.cookie, { archived: true });
+  assert.equal(archive.statusCode, 200, archive.body);
+  const active = await api<{ chats: Array<{ id: string }> }>('GET', `/api/w/${alice.workspaceId}/chats`, alice.cookie);
+  assert.equal(active.chats.some((chat) => chat.id === chatId), false);
+  const archived = await api<{ chats: Array<{ id: string; archived: number }> }>('GET', `/api/w/${alice.workspaceId}/chats?archived=1`, alice.cookie);
+  assert.equal(archived.chats.some((chat) => chat.id === chatId && chat.archived === 1), true);
+
+  const restore = await call('PATCH', `/api/w/${alice.workspaceId}/chats/${chatId}`, alice.cookie, { archived: false });
+  assert.equal(restore.statusCode, 200, restore.body);
+  const restored = await api<{ chats: Array<{ id: string }> }>('GET', `/api/w/${alice.workspaceId}/chats`, alice.cookie);
+  assert.equal(restored.chats.some((chat) => chat.id === chatId), true);
+
+  const remove = await call('DELETE', `/api/w/${alice.workspaceId}/chats/${chatId}`, alice.cookie);
+  assert.equal(remove.statusCode, 200, remove.body);
+  const after = await api<{ chats: Array<{ id: string }> }>('GET', `/api/w/${alice.workspaceId}/chats`, alice.cookie);
+  assert.equal(after.chats.some((chat) => chat.id === chatId), false);
+});

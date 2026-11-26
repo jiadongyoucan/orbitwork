@@ -159,3 +159,12 @@ Target verification: 58/58 tests, typecheck clean, production build; live API sh
 | Provider connection test was not audited | `provider.test` audit records ok/status only, never key or upstream body |
 
 **Verification:** 70/70 tests, typecheck clean, production build; desktop and 390px screenshots for home, capability library, model configuration.
+
+
+## G10 — v2.1 workbench cleanup & chat management (2026-11-26)
+
+**Scope:** remove the duplicate “新建对话” entry and sidebar recent list; make the Workbench composer the single new-chat entry; add archive/delete to every Home recent chat and a restore/delete view for archived chats.
+
+**Implementation review:** CONDITIONAL → GO after fixes. HIGH-1: chats 6–100 were unreachable after removing sidebar recents → “查看全部” two-tab manager over `/chats?limit=100` and `?archived=1`. HIGH-2: action icons were hover-only/low contrast → always visible, `--muted`, 32px (36px mobile), 4px gap. HIGH-3: archived manager and delete confirmation stacked → manager unmounts while confirmation is open and remounts on cancel/confirm.
+
+**Verification:** 71/71 tests (new archive → hide → restore → delete API regression), typecheck clean, production build; browser probe confirms sidebar has no recent/new-chat duplicate, archive hides the row, archived modal exposes restore, delete uses a confirmation dialog, 0 console errors; desktop and 390px screenshots captured.

@@ -239,7 +239,7 @@ Residual risks for v1:
 - Manual UI checks via headless Chrome/DevTools at 1440px and 390px (screenshots in `docs/assets`).
 - Build verification: `npx tsc --noEmit`, `node scripts/build.mjs`, `NODE_ENV=test npm test`.
 
-Current result: **70/70 tests pass**, typecheck clean, production bundle builds in <300ms.
+Current result: **71/71 tests pass**, typecheck clean, production bundle builds in <300ms.
 
 ## 12. Deployment & operations
 
@@ -272,6 +272,7 @@ Internet :80/:443
 | G3 | Test/quality/build review | Conditional go; clean-install verified |
 | G4 | Docker / Aliyun deployment review | Conditional go; static findings fixed; target verification required |
 | G5 | Final acceptance | Conditional go; no blocking code defect; target smoke required |
-| G9 | v2.0 UI reset + model providers | Implementation review conditional go; HIGH findings fixed | 70/70 tests; native pickers, grouped IA, provider CRUD, AAD keys, SSRF-per-request |
+| G9 | v2.0 UI reset + model providers | Conditional go; HIGH findings fixed | Native pickers, grouped IA, provider CRUD, AAD keys, SSRF-per-request |
+| G10 | v2.1 workbench cleanup + chat management | GO | Single Workbench entry, sidebar no recents, all-chat/archive management, 71/71 tests |
 
 Reviewer artifacts and dispositions are recorded in `docs/REVIEW.md`.

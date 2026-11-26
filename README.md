@@ -11,6 +11,7 @@
 OrbitWork 是一个可以在一台云主机上运行的团队 AI 工作台。它把 DeepSeek Harness 式的工作区原语（会话、模型、记忆、沙箱、工作区）与 WorkBuddy 式的任务体验组合起来，并增加了可发布、可安装的能力市场：
 
 - **智能体工作台**：一个主输入框、原生模型/智能体选择、SSE 流式、工具调用、取消、Token 用量；会话仅创建者可见。
+- **更清晰的工作台（v2.1）**：侧边栏只保留“工作台”入口，移除与工作台重复的“新建对话”和“最近对话”；最近对话支持归档、恢复与删除。
 - **模型与 Provider（v2.0）**：工作区管理员可配置 OpenAI 兼容 Provider、模型、上下文窗口与默认项；API Key 使用 AES-256-GCM + AAD 加密，只写不读。未配置时回退到环境变量 `LLM_*`。
 - **记忆**：显式事实卡、关键词注入、`save_memory` 工具、对象级授权。
 - **受限脚本执行（沙箱）**：独立 worker、串行、6 秒、128MB 上限；生产环境使用文件队列 + `network:none` 容器。定位是**内部半可信脚本**，不是「可运行用户上传代码」的安全沙箱。
@@ -106,7 +107,7 @@ npm run dev
 
 ```bash
 npm run typecheck      # tsc --noEmit
-NODE_ENV=test npm test # 70 项领域 + API 集成测试
+NODE_ENV=test npm test # 71 项领域 + API 集成测试
 npm run build          # 生产客户端 + 服务端 bundle
 npm run start          # node dist/server.js（读取 .env）
 ```
@@ -163,7 +164,7 @@ Caddyfile
 
 ## 版本与交付包
 
-仓库使用 Git 管理，当前版本 `v2.0.0`（标签 `v2.0.0`）。
+仓库使用 Git 管理，当前版本 `v2.1.0`（标签 `v2.1.0`）。
 
 ```bash
 git log --oneline        # 提交历史

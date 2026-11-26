@@ -1,13 +1,12 @@
-import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react';
+import { useEffect, useState, type ReactNode } from 'react';
 import { Link, NavLink, Navigate, useLocation, useNavigate } from 'react-router-dom';
 import {
-  Boxes, ChevronDown, ChevronRight, Clock3, Cpu, FolderOpen, LayoutDashboard, LogOut, Menu,
-  MessageSquarePlus, Plus, Settings, Shield, Store, Users, X, Bot, BrainCircuit, Code2,
+  Boxes, ChevronDown, ChevronRight, Cpu, FolderOpen, LayoutDashboard, LogOut, Menu,
+  Plus, Settings, Shield, Store, Users, X, Bot, BrainCircuit, Code2,
 } from 'lucide-react';
 import { api, errorMessage } from '@/lib/api';
 import { useAuth } from '@/context/AuthContext';
 import { useToast } from '@/context/ToastContext';
-import type { Chat } from '@/lib/types';
 import { Avatar, Logo, LogoMark, Modal, PageLoader, Spinner, Toggle, Field } from '@/components/UI';
 import { Icon } from '@/components/Icon';
 import { cn, initials, relativeTime } from '@/lib/utils';
@@ -40,35 +39,12 @@ export function AppShell({ children }: { children: ReactNode }) {
   const navigate = useNavigate();
   const location = useLocation();
   const toast = useToast();
-  const [chats, setChats] = useState<Chat[]>([]);
   const [mobileOpen, setMobileOpen] = useState(false);
   const [wsMenu, setWsMenu] = useState(false);
   const [userMenu, setUserMenu] = useState(false);
   const [createWs, setCreateWs] = useState(false);
   const [newWsName, setNewWsName] = useState('');
   const [creating, setCreating] = useState(false);
-
-  const activeChatId = useMemo(() => {
-    const match = location.pathname.match(/\/app\/c\/([^/]+)/);
-    return match?.[1] ?? null;
-  }, [location.pathname]);
-
-  const loadChats = useCallback(async () => {
-    if (!workspace) return;
-    try {
-      const data = await api.get<{ chats: Chat[] }>(`/api/w/${workspace.id}/chats`);
-      setChats(data.chats.slice(0, 5));
-    } catch {
-      setChats([]);
-    }
-  }, [workspace]);
-
-  useEffect(() => {
-    void loadChats();
-    const handler = () => void loadChats();
-    window.addEventListener('orbit:chats-changed', handler);
-    return () => window.removeEventListener('orbit:chats-changed', handler);
-  }, [loadChats]);
 
   useEffect(() => {
     setMobileOpen(false);
@@ -80,30 +56,6 @@ export function AppShell({ children }: { children: ReactNode }) {
     if (!workspace) return;
     document.title = `${workspace.name} · OrbitWork`;
   }, [workspace]);
-
-  async function newChat() {
-    if (!workspace) return;
-    try {
-      const result = await api.post<{ chat: { id: string } }>(`/api/w/${workspace.id}/chats`, {});
-      window.dispatchEvent(new Event('orbit:chats-changed'));
-      navigate(`/app/c/${result.chat.id}`);
-    } catch (caught) {
-      toast.push(errorMessage(caught), 'error');
-    }
-  }
-
-  useEffect(() => {
-    const onKey = (event: KeyboardEvent) => {
-      const target = event.target as HTMLElement | null;
-      if (event.key.toLowerCase() !== 'n' || event.metaKey || event.ctrlKey || event.altKey) return;
-      if (target && (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable)) return;
-      if (document.querySelector('.overlay')) return;
-      event.preventDefault();
-      void newChat();
-    };
-    window.addEventListener('keydown', onKey);
-    return () => window.removeEventListener('keydown', onKey);
-  }, [workspace, navigate]);
 
   async function createWorkspace(event: React.FormEvent) {
     event.preventDefault();
@@ -128,7 +80,7 @@ export function AppShell({ children }: { children: ReactNode }) {
   }
 
   const currentLabel = [...PRIMARY_NAV, ...TOOL_NAV, ...MANAGE_NAV].find((item) => item.to === location.pathname)?.label
-    ?? (['/app/experts', '/app/skills', '/app/connectors'].includes(location.pathname) ? '能力库' : activeChatId ? '对话' : location.pathname === '/app/admin' ? '平台管理' : '工作台');
+    ?? (['/app/experts', '/app/skills', '/app/connectors'].includes(location.pathname) ? '能力库' : location.pathname.startsWith('/app/c/') ? '对话' : location.pathname === '/app/admin' ? '平台管理' : '工作台');
   const isAdmin = workspace ? workspace.role === 'owner' || workspace.role === 'admin' : false;
   const navActive = (to: string, match: string[] = []) => location.pathname === to || match.includes(location.pathname) || (to !== '/app' && location.pathname.startsWith(`${to}/`));
 
@@ -189,11 +141,6 @@ export function AppShell({ children }: { children: ReactNode }) {
           )}
         </div>
 
-        <button className="btn btn-primary" style={{ width: '100%', justifyContent: 'flex-start', paddingLeft: 12 }} onClick={() => void newChat()}>
-          <MessageSquarePlus size={15} />新建对话
-          <span className="kbd" style={{ marginLeft: 'auto', borderColor: 'rgba(0,0,0,.2)', color: 'rgba(0,0,0,.45)', background: 'rgba(0,0,0,.08)' }}>N</span>
-        </button>
-
         <div className="sidebar-scroll">
           <div className="nav-label"><span>工作</span></div>
           <nav className="nav-group">
@@ -203,17 +150,6 @@ export function AppShell({ children }: { children: ReactNode }) {
               </NavLink>
             ))}
           </nav>
-
-          <div className="nav-label"><span>最近对话</span><Clock3 size={11} /></div>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
-            {chats.length === 0 && <div style={{ padding: '8px 10px', color: 'var(--faint)', fontSize: 11 }}>还没有任务，开始第一个吧。</div>}
-            {chats.map((chat) => (
-              <Link key={chat.id} to={`/app/c/${chat.id}`} className={cn('recent-item', activeChatId === chat.id && 'active')}>
-                <span className="recent-title">{chat.title}</span>
-                <span className="recent-meta">{chat.agent_name || '通用助理'} · {relativeTime(chat.updated_at)}</span>
-              </Link>
-            ))}
-          </div>
 
           <div className="nav-label"><span>工具</span></div>
           <nav className="nav-group">

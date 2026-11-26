@@ -23,14 +23,14 @@ Management
   平台管理     Platform admin only
 ```
 
-The sidebar has two visual groups, no “NEW” badges, no redundant top-bar actions. Recent conversations are limited to five and live under the primary “新建对话” action.
+The sidebar has three visual groups (工作 / 工具 / 管理), no “NEW” badges, no redundant top-bar actions, no “新建对话” button and no recent-chat list. Recent conversations live only on Home; the sidebar has no duplicate list and no separate “新建对话” action — the Workbench composer is the single entry.
 
 ### Home
 
 - Greeting + model readiness chip.
 - One centered composer: agent and model selectors, one send button.
 - Three suggestion chips below, not a wall of mode pills/actions.
-- Two-column lower section: “最近对话” (max 5) and “快速开始” (new agent / install capability / upload file).
+- Two-column lower section: “最近对话” (max 5, with archive/delete and an “已归档” restore modal) and “快速开始” (new agent / install capability / upload file).
 - Stats and marketplace promotion move to their own pages; no duplicate cards on home.
 
 ### Chat
@@ -96,5 +96,5 @@ requested model id
 4. Member cannot mutate providers/models; can use the default in a new chat.
 5. Deleting a provider removes its models and resets the workspace default safely.
 6. Existing env-only installs still work when no provider is configured.
-7. Tests: model CRUD/permissions/key redaction/default selection; full suite 70/70.
+7. Tests: model CRUD/permissions/key redaction/default selection; full suite 71/71.
 8. Desktop and 390px layouts verified; docs updated.

@@ -49,11 +49,11 @@
 
   <main class="doc-main">
     <div class="doc-hero">
-      <div class="doc-eyebrow">◎ Product Specification · v2.0</div>
+      <div class="doc-eyebrow">◎ Product Specification · v2.1</div>
       <h1>OrbitWork 产品文档</h1>
       <p class="doc-lead">一个面向团队、可私有化部署的 AI 智能体工作台：以对话为入口，把专家、技能、连接器与插件市场组合成可复用、可治理的工作能力。</p>
       <div class="doc-meta">
-        <span>版本 2.0.0</span><span>2026-11-26</span><span>Docker-first / 阿里云 ECS 可部署</span><span>中文界面</span>
+        <span>版本 2.1.0</span><span>2026-11-26</span><span>Docker-first / 阿里云 ECS 可部署</span><span>中文界面</span>
       </div>
       <div class="doc-actions">
         <a class="btn btn-dark" href="./architecture.html">阅读架构文档 →</a>
@@ -71,7 +71,7 @@
         <div class="card"><div class="kicker">Capability</div><h3>能力可组装</h3><p class="small">角色指令 × 技能 × 连接器 × 记忆 × 沙箱，组合成专属智能体。</p></div>
         <div class="card"><div class="kicker">Network</div><h3>市场可流通</h3><p class="small">专家/技能/连接器可发布，插件可一键安装；版本快照不可变。</p></div>
       </div>
-      <div class="callout"><strong>当前交付状态：</strong>产品、架构、前后端、数据库迁移、测试、Docker 配置与产品/架构文档均已落在本仓库；70 项自动化测试通过，TypeScript 类型检查通过。生产运行前只需替换环境变量中的密钥与管理员密码。</div>
+      <div class="callout"><strong>当前交付状态：</strong>产品、架构、前后端、数据库迁移、测试、Docker 配置与产品/架构文档均已落在本仓库；71 项自动化测试通过，TypeScript 类型检查通过。生产运行前只需替换环境变量中的密钥与管理员密码。</div>
     </section>
 
     <section id="benchmark">
@@ -140,9 +140,10 @@
     <section id="experience">
       <div class="section-kicker">06 · Experience</div>
       <h2>体验与界面设计</h2>
-      <p>信息架构采用“工作 / 工具 / 管理”三段式；首页只保留一个主输入框、最近对话和快速开始，避免入口堆叠。能力库将专家、技能、连接器收进一个入口，用页签切换。</p>
+      <p>信息架构采用“工作 / 工具 / 管理”三段式；侧边栏只保留“工作台”作为新建入口，不再重复“新建对话”和“最近对话”；首页只保留一个主输入框、最近对话和快速开始，避免入口堆叠；最近对话支持查看全部、归档、恢复与删除。能力库将专家、技能、连接器收进一个入口，用页签切换。</p>
       <p>视觉语言是“深夜工作室”：深色低噪背景、<code>#c8f768</code> 酸橙强调色、细边框、克制的动效。信息层级通过留白和字号建立，而不是堆叠卡片。桌面端采用 260px 常驻侧栏 + 中央工作区；移动端侧栏变为抽屉，聊天输入固定底部。</p>
-      <figure class="shot"><img src="./assets/home.png" alt="OrbitWork 工作台首页" /><figcaption>v2.0 工作台：一个主输入框、最近对话与快速开始。</figcaption></figure>
+      <figure class="shot"><img src="./assets/home.png" alt="OrbitWork 工作台首页" /><figcaption>v2.1 工作台：一个主输入框；最近对话可归档或删除，也可恢复。</figcaption></figure>
+      <figure class="shot"><img src="./assets/chat-manager.png" alt="全部对话管理" /><figcaption>「查看全部」：活动与已归档两个页签，支持恢复和删除；删除前必须确认。</figcaption></figure>
       <figure class="shot"><img src="./assets/library.png" alt="能力库" /><figcaption>能力库：专家/技能/连接器统一入口，页签切换。</figcaption></figure>
       <div class="shot-row">
         <figure class="shot" style="margin:0"><img src="./assets/chat.png" alt="对话界面" /><figcaption>对话：Markdown、工具卡片、模型与 Token 信息。</figcaption></figure>
@@ -152,7 +153,7 @@
       <table>
         <thead><tr><th>界面</th><th>信息架构</th><th>关键交互</th></tr></thead>
         <tbody>
-          <tr><td>工作台</td><td>问候 / 模式 / 输入框 / 最近任务 / 市场卡片 / 用量</td><td>Enter 发送；智能体与模型下拉；快捷提示词；新建任务</td></tr>
+          <tr><td>工作台</td><td>问候 / 一个输入框 / 最近对话 / 快速开始</td><td>Enter 发送；智能体与模型下拉；最近对话可查看全部、归档、恢复、删除</td></tr>
           <tr><td>对话</td><td>会话标题、智能体、模型、消息流、工具事件、输入框</td><td>流式输出、停止、复制、重命名、刷新恢复、Markdown 表格</td></tr>
           <tr><td>智能体</td><td>角色卡片、能力徽章、编辑/删除、开始对话</td><td>创建时绑定技能/连接器、开关记忆/沙箱、选择模型</td></tr>
           <tr><td>专家 / 技能 / 连接器</td><td>分类卡片、状态、版本、安装量、作者</td><td>创建草稿、编辑、发布、从市场安装、专家一键启用</td></tr>
@@ -381,11 +382,11 @@ suspended                      回到 draft（私有，需重新发布）</div>
         <li><span class="tick">✓</span><div><strong>沙箱：</strong>本地 HTTP worker 与生产文件队列；权限与超时验证；工作区开关。</div></li>
         <li><span class="tick">✓</span><div><strong>市场：</strong>发布、安装、收藏、插件打包、版本快照、密钥不泄漏、下架/恢复、安装计数回退。</div></li>
         <li><span class="tick">✓</span><div><strong>权限隔离：</strong>工作区 404、会话私有、成员记忆授权、平台管理员边界、Origin/JSON/速率限制。</div></li>
-        <li><span class="tick">✓</span><div><strong>工程：</strong>迁移 runner、WAL 备份、类型检查、70 项测试、生产构建 < 300ms。</div></li>
+        <li><span class="tick">✓</span><div><strong>工程：</strong>迁移 runner、WAL 备份、类型检查、71 项测试、生产构建 < 300ms。</div></li>
         <li><span class="tick">✓</span><div><strong>部署：</strong>Dockerfile、Compose、Caddy TLS/SSE、沙箱网络隔离、环境变量样例、健康检查。</div></li>
         <li><span class="tick todo">◷</span><div><strong>后续：</strong>真实模型联调（需提供 API Key）、Docker 本机实机启动（当前构建环境无容器守护进程）、生产 TLS 域名验证。</div></li>
       </ul>
-      <div class="callout warn"><strong>测试数字：</strong>本仓库当前为 <strong>70/70</strong> 自动化测试通过（见 <code>npm test</code>）；产品的最终验收仍需要在目标环境配置真实 LLM Key，并执行一次 Docker Compose 启动与浏览器端到端冒烟。</div>
+      <div class="callout warn"><strong>测试数字：</strong>本仓库当前为 <strong>71/71</strong> 自动化测试通过（见 <code>npm test</code>）；产品的最终验收仍需要在目标环境配置真实 LLM Key，并执行一次 Docker Compose 启动与浏览器端到端冒烟。</div>
     </section>
 
     <section id="limits">
@@ -398,7 +399,7 @@ suspended                      回到 draft（私有，需重新发布）</div>
       <h3>运营指标建议</h3>
       <p class="small">激活：注册后 24h 创建首个会话并完成一次工具调用；留存：7 日内再次发起会话；能力复用：安装资产后 7 日内被绑定到智能体；市场健康：发布→安装转化率、安装后 30 日留存、下架率。当前版本提供基础计数，未接入行为埋点。</p>
       <hr />
-      <p class="small">文档版本 2.0 · 2026-11-26 · 与本仓库代码同步。架构细节、数据模型、威胁模型、部署与运维手册见 <a href="./architecture.html">架构与技术文档</a>。</p>
+      <p class="small">文档版本 2.1 · 2026-11-26 · 与本仓库代码同步。架构细节、数据模型、威胁模型、部署与运维手册见 <a href="./architecture.html">架构与技术文档</a>。</p>
     </section>
   </main>
 </div>

@@ -1,14 +1,14 @@
 import { useEffect, useRef, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import {
-  ArrowRight, ArrowUp, Bot, ChevronDown, Cpu, FilePlus2, FolderOpen, Loader2, MessageSquareText,
-  Plus, Sparkles, Store, Zap,
+  Archive, ArrowRight, ArrowUp, Bot, ChevronDown, Cpu, FilePlus2, FolderOpen, Loader2, MessageSquareText,
+  Plus, RotateCcw, Sparkles, Store, Trash2, Zap,
 } from 'lucide-react';
 import { api, errorMessage } from '@/lib/api';
 import { useAuth } from '@/context/AuthContext';
 import { useToast } from '@/context/ToastContext';
 import type { Agent, Chat, ModelOption, Overview } from '@/lib/types';
-import { EmptyState } from '@/components/UI';
+import { ConfirmModal, EmptyState, Modal } from '@/components/UI';
 import { Icon } from '@/components/Icon';
 import { greeting, relativeTime } from '@/lib/utils';
 
@@ -30,6 +30,13 @@ export default function HomePage() {
   const [model, setModel] = useState('');
   const [loading, setLoading] = useState(true);
   const [sending, setSending] = useState(false);
+  const [manageOpen, setManageOpen] = useState(false);
+  const [manageTab, setManageTab] = useState<'active' | 'archived'>('active');
+  const [managedChats, setManagedChats] = useState<Chat[]>([]);
+  const [manageLoading, setManageLoading] = useState(false);
+  const [deleteTarget, setDeleteTarget] = useState<Chat | null>(null);
+  const [actionId, setActionId] = useState('');
+  const [deleteLoading, setDeleteLoading] = useState(false);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
   useEffect(() => {
@@ -77,6 +84,90 @@ export default function HomePage() {
       toast.push(errorMessage(caught), 'error');
       setSending(false);
     }
+  }
+
+  async function refreshRecent() {
+    if (!workspace) return;
+    try {
+      const data = await api.get<Overview>(`/api/w/${workspace.id}/overview`);
+      setOverview(data);
+    } catch {
+      /* keep the local list on transient refresh failure */
+    }
+  }
+
+  async function loadManaged(tab: 'active' | 'archived') {
+    if (!workspace) return;
+    setManageLoading(true);
+    try {
+      const query = tab === 'archived' ? '?archived=1' : '?limit=100';
+      const data = await api.get<{ chats: Chat[] }>(`/api/w/${workspace.id}/chats${query}`);
+      setManagedChats(data.chats);
+    } catch (caught) {
+      toast.push(errorMessage(caught), 'error');
+    } finally {
+      setManageLoading(false);
+    }
+  }
+
+  async function archiveChat(chat: Chat) {
+    if (!workspace) return;
+    setActionId(chat.id);
+    try {
+      await api.patch(`/api/w/${workspace.id}/chats/${chat.id}`, { archived: true });
+      setOverview((current) => current ? { ...current, recentChats: current.recentChats.filter((item) => item.id !== chat.id) } : current);
+      setManagedChats((current) => current.filter((item) => item.id !== chat.id));
+      window.dispatchEvent(new Event('orbit:chats-changed'));
+      toast.push('对话已归档', 'success');
+    } catch (caught) {
+      toast.push(errorMessage(caught), 'error');
+    } finally {
+      setActionId('');
+    }
+  }
+
+  async function restoreChat(chat: Chat) {
+    if (!workspace) return;
+    setActionId(chat.id);
+    try {
+      await api.patch(`/api/w/${workspace.id}/chats/${chat.id}`, { archived: false });
+      setManagedChats((current) => current.filter((item) => item.id !== chat.id));
+      await refreshRecent();
+      toast.push('对话已恢复', 'success');
+    } catch (caught) {
+      toast.push(errorMessage(caught), 'error');
+    } finally {
+      setActionId('');
+    }
+  }
+
+  async function deleteChat() {
+    if (!workspace || !deleteTarget) return;
+    setDeleteLoading(true);
+    try {
+      await api.delete(`/api/w/${workspace.id}/chats/${deleteTarget.id}`);
+      setOverview((current) => current ? { ...current, recentChats: current.recentChats.filter((item) => item.id !== deleteTarget.id) } : current);
+      setManagedChats((current) => current.filter((item) => item.id !== deleteTarget.id));
+      setDeleteTarget(null);
+      window.dispatchEvent(new Event('orbit:chats-changed'));
+      toast.push('对话已删除', 'success');
+    } catch (caught) {
+      toast.push(errorMessage(caught), 'error');
+    } finally {
+      setDeleteLoading(false);
+    }
+  }
+
+  function openManage(tab: 'active' | 'archived') {
+    setManageTab(tab);
+    setManageOpen(true);
+    setManagedChats([]);
+    void loadManaged(tab);
+  }
+
+  function switchManageTab(tab: 'active' | 'archived') {
+    setManageTab(tab);
+    void loadManaged(tab);
   }
 
   const activeModel = models.find((item) => item.id === model);
@@ -155,20 +246,29 @@ export default function HomePage() {
         <section>
           <div className="section-head">
             <span className="section-title">最近对话</span>
-            <span className="badge badge-muted">仅你可见</span>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+              <span className="badge badge-muted">仅你可见</span>
+              <button className="btn btn-ghost btn-sm" style={{ height: 24, padding: '0 7px', fontSize: 10.5 }} onClick={() => openManage('active')}>查看全部</button>
+              <button className="btn btn-ghost btn-sm" style={{ height: 24, padding: '0 7px', fontSize: 10.5 }} onClick={() => openManage('archived')}><Archive size={11} />已归档</button>
+            </div>
           </div>
           <div className="card">
             {loading ? (
               <div style={{ padding: 20, display: 'grid', gap: 10 }}><div className="skeleton" style={{ height: 36 }} /><div className="skeleton" style={{ height: 36 }} /></div>
             ) : recent.length ? recent.slice(0, 5).map((chat) => (
-              <Link key={chat.id} to={`/app/c/${chat.id}`} className="recent-card">
-                <div className="recent-icon"><Icon name={chat.agent_icon || 'message-square'} size={15} /></div>
-                <div style={{ flex: 1, minWidth: 0 }}>
-                  <div className="recent-title">{chat.title}</div>
-                  <div className="recent-meta">{chat.agent_name || '通用助理'} · {relativeTime(chat.updated_at)}</div>
+              <div key={chat.id} className="recent-card recent-card-manage">
+                <Link to={`/app/c/${chat.id}`} className="recent-main">
+                  <div className="recent-icon"><Icon name={chat.agent_icon || 'message-square'} size={15} /></div>
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div className="recent-title">{chat.title}</div>
+                    <div className="recent-meta">{chat.agent_name || '通用助理'} · {relativeTime(chat.updated_at)}</div>
+                  </div>
+                </Link>
+                <div className="recent-actions">
+                  <button className="btn btn-ghost btn-icon btn-sm" disabled={actionId === chat.id} onClick={() => void archiveChat(chat)} title="归档对话" aria-label={`归档 ${chat.title}`}><Archive size={12} /></button>
+                  <button className="btn btn-ghost btn-icon btn-sm" onClick={() => setDeleteTarget(chat)} title="删除对话" aria-label={`删除 ${chat.title}`}><Trash2 size={12} /></button>
                 </div>
-                <ArrowRight size={13} color="var(--faint)" />
-              </Link>
+              </div>
             )) : (
               <EmptyState
                 icon={<MessageSquareText size={19} />}
@@ -207,6 +307,44 @@ export default function HomePage() {
           </Link>
         </section>
       </div>
+
+      <Modal open={manageOpen && !deleteTarget} onClose={() => setManageOpen(false)} title={manageTab === 'active' ? '全部对话' : '已归档对话'} subtitle={manageTab === 'active' ? '你的全部对话，按最近更新排序。' : '归档的对话不会出现在工作台，但可以随时恢复或删除。'}>
+        <div className="manage-tabs" role="tablist" aria-label="对话范围">
+          <button type="button" role="tab" aria-selected={manageTab === 'active'} className={manageTab === 'active' ? 'active' : ''} onClick={() => switchManageTab('active')}>全部对话</button>
+          <button type="button" role="tab" aria-selected={manageTab === 'archived'} className={manageTab === 'archived' ? 'active' : ''} onClick={() => switchManageTab('archived')}><Archive size={11} />已归档</button>
+        </div>
+        {manageLoading ? <div style={{ display: 'grid', gap: 8 }}><div className="skeleton" style={{ height: 42 }} /><div className="skeleton" style={{ height: 42 }} /></div> : managedChats.length === 0 ? (
+          <EmptyState icon={<Archive size={19} />} title={manageTab === 'active' ? '还没有对话' : '没有已归档对话'} description={manageTab === 'active' ? '从工作台上方输入框开始第一个任务。' : '在最近对话上点击归档按钮，对话会收进这里。'} />
+        ) : managedChats.map((chat) => (
+          <div className="archived-row" key={chat.id}>
+            <div className="recent-icon"><Icon name={chat.agent_icon || 'message-square'} size={14} /></div>
+            {manageTab === 'active' ? (
+              <Link to={`/app/c/${chat.id}`} className="managed-main" onClick={() => setManageOpen(false)}>
+                <div className="recent-title">{chat.title}</div>
+                <div className="recent-meta">{chat.agent_name || '通用助理'} · {relativeTime(chat.updated_at)}</div>
+              </Link>
+            ) : (
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <div className="recent-title">{chat.title}</div>
+                <div className="recent-meta">{chat.agent_name || '通用助理'} · {relativeTime(chat.updated_at)}</div>
+              </div>
+            )}
+            {manageTab === 'active' ? (
+              <>
+                <button className="btn btn-ghost btn-icon btn-sm" disabled={actionId === chat.id} onClick={() => void archiveChat(chat)} title="归档对话" aria-label={`归档 ${chat.title}`}><Archive size={13} /></button>
+                <button className="btn btn-ghost btn-icon btn-sm" onClick={() => setDeleteTarget(chat)} title="删除对话" aria-label={`删除 ${chat.title}`}><Trash2 size={13} /></button>
+              </>
+            ) : (
+              <>
+                <button className="btn btn-sm" disabled={actionId === chat.id} onClick={() => void restoreChat(chat)}><RotateCcw size={12} />恢复</button>
+                <button className="btn btn-ghost btn-icon btn-sm" onClick={() => setDeleteTarget(chat)} title="删除对话" aria-label={`删除 ${chat.title}`}><Trash2 size={13} /></button>
+              </>
+            )}
+          </div>
+        ))}
+      </Modal>
+
+      <ConfirmModal open={Boolean(deleteTarget)} onClose={() => setDeleteTarget(null)} onConfirm={() => void deleteChat()} title="删除对话" description={`确定删除「${deleteTarget?.title ?? ''}」吗？消息记录将无法恢复。`} loading={deleteLoading} />
     </div>
   );
 }

@@ -50,10 +50,10 @@
 
   <main class="doc-main">
     <div class="doc-hero">
-      <div class="doc-eyebrow">◎ Architecture & Engineering · v2.0</div>
+      <div class="doc-eyebrow">◎ Architecture & Engineering · v2.1</div>
       <h1>架构与技术文档</h1>
       <p class="doc-lead">模块化单体 + 独立沙箱 worker + SQLite WAL + Docker Compose。目标不是堆技术，而是在一台 ECS 上交付边界清晰、可测试、可运维的团队 AI 工作台。</p>
-      <div class="doc-meta"><span>Node.js 24</span><span>Fastify 5</span><span>React 19</span><span>node:sqlite</span><span>Docker Compose</span><span>70 tests</span></div>
+      <div class="doc-meta"><span>Node.js 24</span><span>Fastify 5</span><span>React 19</span><span>node:sqlite</span><span>Docker Compose</span><span>71 tests</span></div>
       <div class="doc-actions">
         <a class="btn btn-dark" href="./product.html">阅读产品文档 →</a>
         <a class="btn" href="#deploy">部署步骤</a>
@@ -385,7 +385,7 @@ Agent ──web_fetch───► assertSafeUrl(allowPrivate:false)
       <p><code>filesEnabled</code> / <code>networkEnabled</code> 存于 <code>workspaces.settings_json</code>，默认开启。关闭后：运行时不再注册对应工具；文件路由返回 403。审计事件为 <code>file.upload</code> / <code>file.delete</code>，web 抓取计入每次 run 的 <code>toolEvents</code>（含 URL、状态、字节数）。</p>
 
       <h3>测试</h3>
-      <p>新增 23 项测试（文件 API 11 项、领域规则 5 项、SSRF 表格与重定向 2 项），全套 <strong>70/70</strong> 通过；typecheck 与生产构建通过。生产构建下实测：上传 → 列表 → 文本预览 → 下载头 → 磁盘 UUID 落盘 → migration v3；<code>web_fetch</code> 对 example.com 返回 200 并抽取标题，对 127.0.0.1 / 169.254.169.254 / [::1] 全部 <code>PRIVATE_URL</code>。</p>
+      <p>新增 23 项测试（文件 API 11 项、领域规则 5 项、SSRF 表格与重定向 2 项），全套 <strong>71/71</strong> 通过；typecheck 与生产构建通过。生产构建下实测：上传 → 列表 → 文本预览 → 下载头 → 磁盘 UUID 落盘 → migration v3；<code>web_fetch</code> 对 example.com 返回 200 并抽取标题，对 127.0.0.1 / 169.254.169.254 / [::1] 全部 <code>PRIVATE_URL</code>。</p>
     </section>
 
     <section id="trace-thinking">
@@ -432,7 +432,7 @@ ALTER TABLE messages ADD COLUMN reasoning_ms INTEGER;     -- 思考耗时（按�
       <p><code>ReasoningBlock</code> 默认折叠，流式中显示脉冲与「思考中…」，完成后显示持久化的「已思考 Ns」；生成结束后的静默刷新会保留占位消息的 key，避免折叠状态被重置。<code>TraceDrawer</code> 打开时经 REST 拉取，流式中通过 SSE <code>trace</code> 事件按 seq 合并，并提供「仅看错误」与「复制 Markdown」。</p>
 
       <h3>测试</h3>
-      <p>新增 4 项测试：一次真实 run 的轨迹包含 5 类事件、seq 单调、meta 早于 trace、跨租户 404、limit 截断标记、删除会话后 404；每会话 1000 条保留上限与最旧裁剪；v3 数据库升级后补齐列；错误脱敏。全套 <strong>70/70</strong> 通过。UI 侧用无头 Chrome 验证折叠/展开、轨迹抽屉 5 条事件与 0 控制台错误。</p>
+      <p>新增 4 项测试：一次真实 run 的轨迹包含 5 类事件、seq 单调、meta 早于 trace、跨租户 404、limit 截断标记、删除会话后 404；每会话 1000 条保留上限与最旧裁剪；v3 数据库升级后补齐列；错误脱敏。全套 <strong>71/71</strong> 通过。UI 侧用无头 Chrome 验证折叠/展开、轨迹抽屉 5 条事件与 0 控制台错误。</p>
     </section>
 
     <section id="connector">
@@ -480,6 +480,7 @@ ALTER TABLE messages ADD COLUMN reasoning_ms INTEGER;     -- 思考耗时（按�
     <section id="frontend">
       <div class="section-kicker">17 · Frontend</div>
       <h2>前端与构建</h2>
+      <p>v2.1 起侧边栏只保留「工作台」作为新建入口，不再渲染「新建对话」或最近对话列表；完整历史通过工作台的「查看全部」管理弹层访问（活动/已归档两个页签，支持恢复与删除）。归档/删除沿用 <code>PATCH/DELETE /api/w/:ws/chats/:id</code>，由所属用户校验。</p>
       <ul>
         <li>React 19 + React Router 7；单页应用；服务端由 Fastify 托管 <code>dist/public</code>。</li>
         <li>esbuild 单次 build：TSX bundle + CSS，约 150–300ms；无 Vite dev server 依赖，NPM 脚本更少。</li>
@@ -599,10 +600,11 @@ docker compose up -d --build
           <tr><td>G0</td><td>架构、租户、沙箱、范围</td><td>条件通过 / 缩减 v1</td><td>采纳：不可变版本、安装校验、Docker 隔离、迁移、备份、SSE 生命周期等</td></tr>
           <tr><td>G1</td><td>后端安全、市场、运行时</td><td>NO-GO → 修复 → GO</td><td>修复市场凭据泄漏、overview 越权、IP 轮换限流、安装孤儿、stale run、记忆授权、沙箱网络、平台审计与迁移兼容；23 项回归测试（v1.1 前）</td></tr>
           <tr><td>G2</td><td>产品体验 / 桌面 &amp; 移动</td><td>条件通过 → 已修复</td><td>修正 @/slash 误导、示例消息标识、市场安装去向/权限、错误态、移动表格、焦点与对比度</td></tr>
-          <tr><td>G3</td><td>测试 / 构建 / 质量</td><td>条件通过 → 已修复</td><td>干净 npm ci 后 tsc/build 通过；v2.0 全套 70 项测试通过</td></tr>
+          <tr><td>G3</td><td>测试 / 构建 / 质量</td><td>条件通过 → 已修复</td><td>干净 npm ci 后 tsc/build 通过；v2.0 全套 71 项测试通过</td></tr>
           <tr><td>G4</td><td>Docker / 阿里云</td><td>条件通过 → 已修复</td><td>修复恢复 WAL/权限、占位密钥、日志轮转、超时、迁移孤儿、.dockerignore；preflight 自检</td></tr>
-          <tr><td>G5</td><td>最终验收</td><td>条件通过</td><td>无确认的阻断代码缺陷；70/70 测试、类型与构建通过。Docker、Caddy、真实模型与队列隔离需在目标环境冒烟</td></tr>
-          <tr><td>G9</td><td>v2.0 UI / Provider</td><td>条件通过 → 已修复</td><td>原生选择器、三段式导航、模型 Provider CRUD、AAD 密钥、SSRF 校验、默认模型一致性、密钥失败关闭与 70 项测试</td></tr>
+          <tr><td>G5</td><td>最终验收</td><td>条件通过</td><td>无确认的阻断代码缺陷；71/71 测试、类型与构建通过。Docker、Caddy、真实模型与队列隔离需在目标环境冒烟</td></tr>
+          <tr><td>G9</td><td>v2.0 UI / Provider</td><td>条件通过 → 已修复</td><td>原生选择器、三段式导航、模型 Provider CRUD、AAD 密钥、SSRF 校验、默认模型一致性、密钥失败关闭</td></tr>
+          <tr><td>G10</td><td>v2.1 工作台去重 / 对话管理</td><td>条件通过 → GO</td><td>单入口、侧栏无最近对话、查看全部、归档/恢复/删除与确认、71 项测试</td></tr>
         </tbody>
       </table>
       <p class="small">G1 的完整发现与修复记录见仓库 <code>docs/REVIEW.md</code>。独立 reviewer 在修复后复查关键路径，避免“自己审自己”。</p>
@@ -625,7 +627,7 @@ docker compose up -d --build
         </tbody>
       </table>
       <hr />
-      <p class="small">文档版本 2.0 · 2026-11-26 · 代码仓库：<code>chat_ai/</code> · 产品文档：<a href="./product.html">product.html</a> · 封面与快速开始：<a href="./index.html">index.html</a></p>
+      <p class="small">文档版本 2.1 · 2026-11-26 · 代码仓库：<code>chat_ai/</code> · 产品文档：<a href="./product.html">product.html</a> · 封面与快速开始：<a href="./index.html">index.html</a></p>
     </section>
   </main>
 </div>
