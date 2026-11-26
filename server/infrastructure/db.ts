@@ -343,6 +343,81 @@ CREATE INDEX IF NOT EXISTS idx_workspace_models_ws ON workspace_models(workspace
 CREATE UNIQUE INDEX IF NOT EXISTS idx_workspace_models_default ON workspace_models(workspace_id) WHERE is_default = 1;
 `,
   },
+  {
+    version: 6,
+    name: 'AI workforce goals and runs',
+    sql: `
+CREATE TABLE IF NOT EXISTS workforce_goals (
+  id TEXT PRIMARY KEY,
+  workspace_id TEXT NOT NULL REFERENCES workspaces(id) ON DELETE CASCADE,
+  user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  objective TEXT NOT NULL,
+  status TEXT NOT NULL DEFAULT 'planned' CHECK (status IN ('planned','approved','running','review','accepted','failed')),
+  plan_json TEXT NOT NULL,
+  context_json TEXT NOT NULL DEFAULT '{}',
+  created_at INTEGER NOT NULL,
+  updated_at INTEGER NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_workforce_goals_ws ON workforce_goals(workspace_id, created_at);
+
+CREATE TABLE IF NOT EXISTS workforce_runs (
+  id TEXT PRIMARY KEY,
+  workspace_id TEXT NOT NULL REFERENCES workspaces(id) ON DELETE CASCADE,
+  goal_id TEXT NOT NULL UNIQUE REFERENCES workforce_goals(id) ON DELETE CASCADE,
+  user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  status TEXT NOT NULL DEFAULT 'approved' CHECK (status IN ('approved','running','review','accepted','failed')),
+  snapshot_json TEXT NOT NULL DEFAULT '{}',
+  verification_json TEXT NOT NULL DEFAULT '{}',
+  report_md TEXT NOT NULL DEFAULT '',
+  started_at INTEGER,
+  finished_at INTEGER,
+  accepted_at INTEGER,
+  created_at INTEGER NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_workforce_runs_ws ON workforce_runs(workspace_id, created_at);
+
+CREATE TABLE IF NOT EXISTS workforce_tasks (
+  id TEXT PRIMARY KEY,
+  run_id TEXT NOT NULL REFERENCES workforce_runs(id) ON DELETE CASCADE,
+  task_key TEXT NOT NULL,
+  seq INTEGER NOT NULL,
+  title TEXT NOT NULL,
+  role_id TEXT NOT NULL,
+  role_name TEXT NOT NULL,
+  kind TEXT NOT NULL,
+  depends_json TEXT NOT NULL DEFAULT '[]',
+  status TEXT NOT NULL DEFAULT 'pending' CHECK (status IN ('pending','running','done','failed')),
+  output TEXT NOT NULL DEFAULT '',
+  error TEXT NOT NULL DEFAULT '',
+  started_at INTEGER,
+  finished_at INTEGER,
+  UNIQUE(run_id, task_key)
+);
+CREATE INDEX IF NOT EXISTS idx_workforce_tasks_run ON workforce_tasks(run_id, seq);
+
+CREATE TABLE IF NOT EXISTS workforce_evidence (
+  id TEXT PRIMARY KEY,
+  run_id TEXT NOT NULL REFERENCES workforce_runs(id) ON DELETE CASCADE,
+  task_id TEXT NOT NULL REFERENCES workforce_tasks(id) ON DELETE CASCADE,
+  title TEXT NOT NULL,
+  kind TEXT NOT NULL,
+  source TEXT NOT NULL,
+  payload_json TEXT NOT NULL DEFAULT '{}',
+  created_at INTEGER NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_workforce_evidence_run ON workforce_evidence(run_id, created_at);
+`,
+  },
+  {
+    version: 7,
+    name: 'workforce synthetic evidence flag',
+    run: (db) => {
+      const columns = db.prepare('PRAGMA table_info(workforce_runs)').all() as Array<{ name: string }>;
+      if (!columns.some((column) => column.name === 'synthetic')) {
+        db.exec('ALTER TABLE workforce_runs ADD COLUMN synthetic INTEGER NOT NULL DEFAULT 1');
+      }
+    },
+  },
 ];
 
 function runMigrations(db: DB): void {

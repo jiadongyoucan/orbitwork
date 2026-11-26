@@ -2,7 +2,7 @@ import { useEffect, useState, type ReactNode } from 'react';
 import { Link, NavLink, Navigate, useLocation, useNavigate } from 'react-router-dom';
 import {
   Boxes, ChevronDown, ChevronRight, FolderOpen, LayoutDashboard, LogOut, Menu,
-  Plus, Settings, Shield, Store, X, Bot, BrainCircuit, Code2,
+  Plus, Settings, Shield, Store, X, Bot, BrainCircuit, Code2, Workflow,
 } from 'lucide-react';
 import { api, errorMessage } from '@/lib/api';
 import { useAuth } from '@/context/AuthContext';
@@ -14,6 +14,7 @@ import { cn, initials } from '@/lib/utils';
 const PRIMARY_NAV = [
   { to: '/app', label: '工作台', icon: LayoutDashboard, end: true },
   { to: '/app/agents', label: '智能体', icon: Bot },
+  { to: '/app/workforce', label: 'AI Workforce', icon: Workflow },
   { to: '/app/experts', label: '能力库', icon: Boxes, match: ['/app/experts', '/app/skills', '/app/connectors'] },
   { to: '/app/market', label: '插件市场', icon: Store },
 ];
@@ -76,7 +77,7 @@ export function AppShell({ children }: { children: ReactNode }) {
   }
 
   const currentLabel = [...PRIMARY_NAV, ...TOOL_NAV].find((item) => item.to === location.pathname)?.label
-    ?? (location.pathname === '/app/models' ? '模型与 Provider' : location.pathname === '/app/settings' || location.pathname === '/app/members' ? '账号与安全' : ['/app/experts', '/app/skills', '/app/connectors'].includes(location.pathname) ? '能力库' : location.pathname.startsWith('/app/c/') ? '对话' : location.pathname === '/app/admin' ? '平台管理' : '工作台');
+    ?? (location.pathname === '/app/models' ? '模型与 Provider' : location.pathname === '/app/settings' || location.pathname === '/app/members' ? '账号与安全' : ['/app/experts', '/app/skills', '/app/connectors'].includes(location.pathname) ? '能力库' : location.pathname.startsWith('/app/workforce/') ? 'AI Workforce' : location.pathname.startsWith('/app/c/') ? '对话' : location.pathname === '/app/admin' ? '平台管理' : '工作台');
   const navActive = (to: string, match: string[] = []) => location.pathname === to || match.includes(location.pathname) || (to !== '/app' && location.pathname.startsWith(`${to}/`));
 
   if (!workspace) {

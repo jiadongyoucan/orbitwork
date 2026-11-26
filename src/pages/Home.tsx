@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import {
   Archive, ArrowRight, ArrowUp, Bot, ChevronDown, Cpu, FilePlus2, FolderOpen, Loader2, MessageSquareText,
-  Plus, RotateCcw, Sparkles, Store, Trash2, Zap,
+  Plus, RotateCcw, Sparkles, Store, Trash2, Workflow, Zap,
 } from 'lucide-react';
 import { api, errorMessage } from '@/lib/api';
 import { useAuth } from '@/context/AuthContext';
@@ -282,6 +282,11 @@ export default function HomePage() {
               <span className="quick-start-icon"><Bot size={16} /></span>
               <span><b>创建智能体</b><small>把角色、技能和工具组合起来</small></span>
               <Plus size={14} />
+            </Link>
+            <Link to="/app/workforce" className="quick-start-item">
+              <span className="quick-start-icon"><Workflow size={16} /></span>
+              <span><b>发起 AI Workforce</b><small>让 AI 组织工作、验证证据</small></span>
+              <ArrowRight size={14} />
             </Link>
             <Link to="/app/market" className="quick-start-item">
               <span className="quick-start-icon"><Store size={16} /></span>

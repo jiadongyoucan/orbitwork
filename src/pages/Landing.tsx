@@ -38,7 +38,7 @@ export default function Landing() {
       </nav>
 
       <header className="landing-hero">
-        <div className="hero-kicker"><span className="badge badge-accent"><Sparkles size={11} /> ORBITWORK 2.2 · AI WORKBENCH</span></div>
+        <div className="hero-kicker"><span className="badge badge-accent"><Sparkles size={11} /> ORBITWORK 2.4 · AI WORKBENCH</span></div>
         <h1 className="landing-title">让 AI 从对话<br /><span className="grad">走进真实工作流</span></h1>
         <p className="landing-sub">
           一个能配置模型、使用工具、记住上下文，并把成果留在工作区里的 AI 工作台。
@@ -51,7 +51,7 @@ export default function Landing() {
         <div className="hero-note"><CheckCircle2 size={12} style={{ display: 'inline', marginRight: 4, verticalAlign: -2 }} />自托管 · OpenAI 兼容 · DeepSeek / Qwen / 本地模型</div>
         <div className="hero-stats">
           <div><b>12</b><span>能力原语</span></div>
-          <div><b>71</b><span>自动化测试</span></div>
+          <div><b>76</b><span>自动化测试</span></div>
           <div><b>1</b><span>条命令部署</span></div>
           <div><b>100%</b><span>自托管部署</span></div>
         </div>

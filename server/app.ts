@@ -18,8 +18,10 @@ import { chatRoutes } from './http/routes/chats.js';
 import { adminRoutes } from './http/routes/admin.js';
 import { miscRoutes } from './http/routes/misc.js';
 import { modelRoutes } from './http/routes/models.js';
+import { workforceRoutes } from './http/routes/workforce.js';
 import { seedDatabase } from './seed.js';
 import { reconcileRunsOnBoot } from './application/agent-runtime.js';
+import { reconcileWorkforceRuns } from './application/workforce-service.js';
 
 export type AppOptions = {
   dbPath?: string;
@@ -41,6 +43,7 @@ export async function createApp(options: AppOptions = {}): Promise<FastifyInstan
   const db: DB = openDb(options.dbPath ?? config.dbPath);
   cleanupTempFiles();
   reconcileRunsOnBoot(db);
+  reconcileWorkforceRuns(db);
   if (options.seed !== false) await seedDatabase(db);
   const app = Fastify({
     logger: options.logger ?? false,
@@ -103,6 +106,7 @@ export async function createApp(options: AppOptions = {}): Promise<FastifyInstan
 
   await miscRoutes(app, db);
   await modelRoutes(app, db);
+  await workforceRoutes(app, db);
   await authRoutes(app, db);
   await workspaceRoutes(app, db);
   await agentRoutes(app, db);

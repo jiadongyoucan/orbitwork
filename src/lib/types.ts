@@ -252,3 +252,110 @@ export type WorkspaceFile = {
   createdAt: number;
   updatedAt: number;
 };
+
+export type WorkforceRole = {
+  id: string;
+  name: string;
+  title: string;
+  responsibility: string;
+  skills: string[];
+};
+
+export type WorkforcePlanTask = {
+  id: string;
+  seq: number;
+  title: string;
+  roleId: string;
+  roleName: string;
+  kind: string;
+  dependsOn: string[];
+  outputContract: string;
+  evidence: string[];
+};
+
+export type WorkforcePlan = {
+  version: number;
+  kind: string;
+  objective: string;
+  versionName: string;
+  platform: string;
+  scope: string;
+  desiredOutcome: string;
+  assumptions: string[];
+  successCriteria: string[];
+  tasks: WorkforcePlanTask[];
+};
+
+export type WorkforceEvidence = {
+  id: string;
+  title: string;
+  kind: string;
+  source: string;
+  payload: unknown;
+};
+
+export type WorkforceTask = {
+  id: string;
+  key: string;
+  seq: number;
+  title: string;
+  roleId: string;
+  roleName: string;
+  kind: string;
+  dependsOn: string[];
+  status: 'pending' | 'running' | 'done' | 'failed';
+  output: string;
+  outputContract?: string;
+  error: string;
+  startedAt: number | null;
+  finishedAt: number | null;
+  evidence: WorkforceEvidence[];
+};
+
+export type WorkforceVerification = {
+  verdict: 'pass' | 'conditional';
+  score: number;
+  checks: Array<{ id: string; label: string; status: 'pass' | 'warn'; detail: string }>;
+  riskLevel: string;
+};
+
+export type WorkforceRun = {
+  id: string;
+  status: 'approved' | 'running' | 'review' | 'accepted' | 'failed';
+  createdAt: number;
+  startedAt: number | null;
+  finishedAt: number | null;
+  acceptedAt: number | null;
+  report: string;
+  verification: WorkforceVerification | null;
+  synthetic: boolean;
+  snapshot: Record<string, unknown>;
+  tasks: WorkforceTask[];
+};
+
+export type WorkforceGoal = {
+  id: string;
+  objective: string;
+  ownerId: string;
+  status: 'planned' | 'approved' | 'running' | 'review' | 'accepted' | 'failed';
+  createdAt: number;
+  updatedAt: number;
+  plan: WorkforcePlan;
+  run: WorkforceRun | null;
+};
+
+export type WorkforceSummary = {
+  id: string;
+  objective: string;
+  status: string;
+  createdAt: number;
+  taskTotal: number;
+  taskDone: number;
+  runStatus: string | null;
+};
+
+export type WorkforceOverview = {
+  goals: WorkforceSummary[];
+  roles: WorkforceRole[];
+  stats: { total: number; accepted: number; inProgress: number; roles: number; verifiedRate: number };
+};

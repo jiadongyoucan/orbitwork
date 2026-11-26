@@ -193,3 +193,9 @@ export const modelInputSchema = z
   .strict();
 
 export const modelPatchSchema = modelInputSchema.partial().strict();
+
+export const workforceGoalInputSchema = z
+  .object({
+    objective: z.string().trim().min(8).max(2000),
+  })
+  .strict();

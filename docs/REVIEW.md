@@ -186,3 +186,10 @@ Target verification: 58/58 tests, typecheck clean, production build; live API sh
 **Implementation review:** CONDITIONAL → GO. Fixed inaccurate data-residency copy (external model calls go to the configured Provider; only “100% 自托管” remains) and gated every auth CTA on `loading` so an authenticated visitor never sees “登录” or a clickable 开始创作 to `/signup` during session bootstrap.
 
 **Verification:** 71/71 tests, typecheck clean, production build; logged-out CTA probe shows 登录 + 开始创作, logged-in probe shows only 开始创作; login page shows a prominent first-time registration callout; no console errors; 1440px and 390px full-page screenshots.
+
+
+## G13 — v2.4 AI Workforce OS MVP (2026-11-27)
+
+**Scope:** implement the first vertical slice of AI_Workforce_OS.html: release-readiness goal, AI Manager SOP, seven AI employee roles, dependency-ordered execution, evidence store, independent verifier and human acceptance, with no new infrastructure.
+
+**Implementation review:** CONDITIONAL GO. Fixed: verifier now fails on a blocking risk and acceptance requires pass or an explicit admin risk acceptance with a reason; synthetic snapshots are persisted (migration v7), surfaced in UI/report and cannot be mistaken for real release evidence; failed runs are retryable and boot reconciliation clears stale running states; approval/execution require creator/admin and acceptance requires workspace admin; member read-only regression test added. Residual: connectors/Tool Registry, plan editing/rejection/clarification, live monitoring and full 11-task release scene are next milestones. **Verification:** 76/76 tests, typecheck clean, production build; browser flow goal → plan approval → execution → verification → acceptance; member read-only mutation test; desktop and mobile screenshots.

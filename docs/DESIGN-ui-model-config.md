@@ -94,5 +94,5 @@ requested model id
 4. Member cannot mutate providers/models; can use the default in a new chat.
 5. Deleting a provider removes its models and resets the workspace default safely.
 6. Existing env-only installs still work when no provider is configured.
-7. Tests: model CRUD/permissions/key redaction/default selection; full suite 71/71.
+7. Tests: model CRUD/permissions/key redaction/default selection; full suite 76/76.
 8. Desktop and 390px layouts verified; docs updated.

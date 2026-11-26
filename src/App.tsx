@@ -15,6 +15,8 @@ import FilesPage from '@/pages/Files';
 import SandboxPage from '@/pages/Sandbox';
 import SettingsPage from '@/pages/Settings';
 import ModelsPage from '@/pages/Models';
+import WorkforcePage from '@/pages/Workforce';
+import WorkforceDetailPage from '@/pages/WorkforceDetail';
 import AdminPage from '@/pages/Admin';
 import { EmptyState, PageHeader } from '@/components/UI';
 
@@ -63,6 +65,8 @@ export default function App() {
               <Route index element={<HomePage />} />
               <Route path="c/:chatId" element={<ChatPage />} />
               <Route path="agents" element={<AgentsPage />} />
+              <Route path="workforce" element={<WorkforcePage />} />
+              <Route path="workforce/:goalId" element={<WorkforceDetailPage />} />
               <Route path="experts" element={<ExpertsPage />} />
               <Route path="skills" element={<SkillsPage />} />
               <Route path="connectors" element={<ConnectorsPage />} />
