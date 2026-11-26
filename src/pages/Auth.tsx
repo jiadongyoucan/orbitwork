@@ -55,6 +55,7 @@ export function LoginPage() {
   const [loading, setLoading] = useState(false);
   const next = params.get('next');
   const destination = next && next.startsWith('/') && !next.startsWith('//') ? next : '/app';
+  const signupPath = next ? `/signup?next=${encodeURIComponent(next)}` : '/signup';
 
   async function submit(event: React.FormEvent) {
     event.preventDefault();
@@ -95,12 +96,10 @@ export function LoginPage() {
           {loading ? <Loader2 size={15} className="spin" /> : null}{loading ? '正在登录…' : '登录'} {!loading && <ArrowRight size={15} />}
         </button>
       </form>
-      <div style={{ marginTop: 16, padding: '11px 12px', border: '1px solid var(--line)', borderRadius: 10, background: 'rgba(255,255,255,.02)', fontSize: 11, color: 'var(--faint)', lineHeight: 1.6 }}>
-        本地演示账号见 README 或部署环境的 <span className="mono">.env</span>。生产环境请使用管理员账号并关闭演示种子。
+      <div className="auth-register-callout">
+        <div><b>第一次使用 OrbitWork？</b><span>创建账号，30 秒建立你的工作区。</span></div>
+        <Link to={signupPath} className="btn btn-sm">创建账号</Link>
       </div>
-      <p style={{ color: 'var(--muted)', fontSize: 12, marginTop: 22 }}>
-        还没有账号？ <Link to="/signup" style={{ color: 'var(--accent)' }}>创建工作区</Link>
-      </p>
     </AuthShell>
   );
 }
@@ -111,6 +110,7 @@ export function SignupPage() {
   const [params] = useSearchParams();
   const next = params.get('next');
   const destination = next && next.startsWith('/') && !next.startsWith('//') ? next : '/app';
+  const signupPath = next ? `/signup?next=${encodeURIComponent(next)}` : '/signup';
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');

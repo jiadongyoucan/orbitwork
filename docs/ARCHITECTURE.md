@@ -1,6 +1,6 @@
 # OrbitWork — Architecture & Engineering Notes
 
-> Version 2.2 · 2026-11-26 · Single-node, Docker-first deployment.
+> Version 2.3 · 2026-11-26 · Single-node, Docker-first deployment.
 > This document is the source of truth for the implementation in this repository. The customer-facing HTML version lives at `docs/architecture.html`.
 
 ## 1. Product scope (shipped v1)
@@ -275,5 +275,6 @@ Internet :80/:443
 | G9 | v2.0 UI reset + model providers | Conditional go; HIGH findings fixed | Native pickers, grouped IA, provider CRUD, AAD keys, SSRF-per-request |
 | G10 | v2.1 workbench cleanup + chat management | GO | Single Workbench entry, sidebar no recents, all-chat/archive management, 71/71 tests |
 | G11 | v2.2 account & security hub | GO | Sidebar management entries removed; members moved into settings tabs; 71/71 tests |
+| G12 | v2.3 marketing landing / CTA | GO | Logged-out login + start; logged-in start only; first-time signup guidance; 71/71 tests |
 
 Reviewer artifacts and dispositions are recorded in `docs/REVIEW.md`.

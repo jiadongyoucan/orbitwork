@@ -177,3 +177,12 @@ Target verification: 58/58 tests, typecheck clean, production build; live API sh
 **Implementation review:** CONDITIONAL → GO after fixes. HIGH: members exposed admin controls to platform admins without workspace role → workspace role only; file empty-state linked to settings default tab instead of workspace tab → `?tab=workspace`; non-admin toggles were silent no-ops → workspace tab admin-only + `Toggle disabled`; default model had two controls → Models page only; settings save blanked the page → loaded-workspace ref; model page was a nav dead end → breadcrumb + return. Optional stale default PATCH removed.
 
 **Verification:** 71/71 tests, typecheck clean, production build; browser probe confirms sidebar has only 工作/工具 groups, user menu has one settings entry, `/app/members` redirects to the members tab, settings shows three tabs, 0 console errors; desktop screenshots for all three tabs.
+
+
+## G12 — v2.3 marketing landing & CTA (2026-11-26)
+
+**Scope:** redesign the public homepage around product value, model freedom, workflow and trust; remove “进入工作台”; keep “开始创作” as the single primary action; show “登录” only when logged out; guide first-time users to register from login.
+
+**Implementation review:** CONDITIONAL → GO. Fixed inaccurate data-residency copy (external model calls go to the configured Provider; only “100% 自托管” remains) and gated every auth CTA on `loading` so an authenticated visitor never sees “登录” or a clickable 开始创作 to `/signup` during session bootstrap.
+
+**Verification:** 71/71 tests, typecheck clean, production build; logged-out CTA probe shows 登录 + 开始创作, logged-in probe shows only 开始创作; login page shows a prominent first-time registration callout; no console errors; 1440px and 390px full-page screenshots.

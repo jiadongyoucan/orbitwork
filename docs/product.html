@@ -49,11 +49,11 @@
 
   <main class="doc-main">
     <div class="doc-hero">
-      <div class="doc-eyebrow">◎ Product Specification · v2.2</div>
+      <div class="doc-eyebrow">◎ Product Specification · v2.3</div>
       <h1>OrbitWork 产品文档</h1>
       <p class="doc-lead">一个面向团队、可私有化部署的 AI 智能体工作台：以对话为入口，把专家、技能、连接器与插件市场组合成可复用、可治理的工作能力。</p>
       <div class="doc-meta">
-        <span>版本 2.2.0</span><span>2026-11-26</span><span>Docker-first / 阿里云 ECS 可部署</span><span>中文界面</span>
+        <span>版本 2.3.0</span><span>2026-11-26</span><span>Docker-first / 阿里云 ECS 可部署</span><span>中文界面</span>
       </div>
       <div class="doc-actions">
         <a class="btn btn-dark" href="./architecture.html">阅读架构文档 →</a>
@@ -140,9 +140,10 @@
     <section id="experience">
       <div class="section-kicker">06 · Experience</div>
       <h2>体验与界面设计</h2>
-      <p>侧边栏只保留“工作 / 工具”两组；模型配置从工作台和设置进入；账号、成员、权限与密码统一收进用户菜单的「账号与安全」，不再占用侧栏。首页只保留一个主输入框、最近对话和快速开始；最近对话支持查看全部、归档、恢复与删除。能力库将专家、技能、连接器收进一个入口，用页签切换。</p>
+      <p>公开首页以产品价值、模型自由、工作流与安全为叙事主线；登录前提供“登录 / 开始创作”，登录后只保留“开始创作”，登录页突出首次注册。侧边栏只保留“工作 / 工具”两组；模型配置从工作台和设置进入；账号、成员、权限与密码统一收进用户菜单的「账号与安全」，不再占用侧栏。首页只保留一个主输入框、最近对话和快速开始；最近对话支持查看全部、归档、恢复与删除。能力库将专家、技能、连接器收进一个入口，用页签切换。</p>
       <p>视觉语言是“深夜工作室”：深色低噪背景、<code>#c8f768</code> 酸橙强调色、细边框、克制的动效。信息层级通过留白和字号建立，而不是堆叠卡片。桌面端采用 260px 常驻侧栏 + 中央工作区；移动端侧栏变为抽屉，聊天输入固定底部。</p>
-      <figure class="shot"><img src="./assets/home.png" alt="OrbitWork 工作台首页" /><figcaption>v2.2 工作台：一个主输入框；最近对话可归档或删除，也可恢复。</figcaption></figure>
+      <figure class="shot"><img src="./assets/landing.png" alt="OrbitWork 公开首页" /><figcaption>v2.3 公开首页：单一主 CTA「开始创作」，登录入口只对未登录用户显示。</figcaption></figure>
+      <figure class="shot"><img src="./assets/home.png" alt="OrbitWork 工作台首页" /><figcaption>v2.3 工作台：一个主输入框；最近对话可归档或删除，也可恢复。</figcaption></figure>
       <figure class="shot"><img src="./assets/chat-manager.png" alt="全部对话管理" /><figcaption>「查看全部」：活动与已归档两个页签，支持恢复和删除；删除前必须确认。</figcaption></figure>
       <figure class="shot"><img src="./assets/library.png" alt="能力库" /><figcaption>能力库：专家/技能/连接器统一入口，页签切换。</figcaption></figure>
       <div class="shot-row">
@@ -400,7 +401,7 @@ suspended                      回到 draft（私有，需重新发布）</div>
       <h3>运营指标建议</h3>
       <p class="small">激活：注册后 24h 创建首个会话并完成一次工具调用；留存：7 日内再次发起会话；能力复用：安装资产后 7 日内被绑定到智能体；市场健康：发布→安装转化率、安装后 30 日留存、下架率。当前版本提供基础计数，未接入行为埋点。</p>
       <hr />
-      <p class="small">文档版本 2.2 · 2026-11-26 · 与本仓库代码同步。架构细节、数据模型、威胁模型、部署与运维手册见 <a href="./architecture.html">架构与技术文档</a>。</p>
+      <p class="small">文档版本 2.3 · 2026-11-26 · 与本仓库代码同步。架构细节、数据模型、威胁模型、部署与运维手册见 <a href="./architecture.html">架构与技术文档</a>。</p>
     </section>
   </main>
 </div>
