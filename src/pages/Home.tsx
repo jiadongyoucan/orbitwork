@@ -173,9 +173,7 @@ export default function HomePage() {
   const activeModel = models.find((item) => item.id === model);
   const recent = overview?.recentChats ?? [];
   const filesEnabled = workspace?.settings.filesEnabled !== false;
-  const isAdmin = workspace?.role === 'owner' || workspace?.role === 'admin';
   const demo = models.length === 0 || Boolean(activeModel?.demo);
-  const modelSettingsPath = isAdmin ? '/app/models' : '/app/settings';
 
   return (
     <div className="home-v2 fade-in">
@@ -185,11 +183,10 @@ export default function HomePage() {
           <h1>今天想完成什么？</h1>
           <p>把目标交给智能体，剩下的交给工作区里的能力与工具。</p>
         </div>
-        <Link to={modelSettingsPath} className={demo ? 'model-status model-status-demo' : 'model-status'} aria-live="polite">
+        <div className={demo ? 'model-status model-status-demo' : 'model-status'} aria-live="polite">
           {demo ? <Zap size={13} /> : <Cpu size={13} />}
           <span>{demo ? '演示模式' : activeModel?.label || '已配置模型'}</span>
-          <ChevronDown size={12} />
-        </Link>
+        </div>
       </header>
 
       <section className="composer-v2" aria-label="新建任务">
@@ -226,7 +223,6 @@ export default function HomePage() {
               </select>
               <ChevronDown size={11} />
             </label>
-            {demo && <Link to={modelSettingsPath} className="composer-config-link">配置模型</Link>}
           </div>
           <button className="send-btn" onClick={() => void send()} disabled={!prompt.trim() || sending} aria-label="发送">
             {sending ? <Loader2 size={16} className="spin" /> : <ArrowUp size={17} />}

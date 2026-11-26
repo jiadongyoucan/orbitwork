@@ -171,11 +171,11 @@ export function Field({ label, hint, children }: { label: string; hint?: string;
   );
 }
 
-export function Toggle({ checked, onChange, label }: { checked: boolean; onChange: (value: boolean) => void; label: string }) {
+export function Toggle({ checked, onChange, label, disabled }: { checked: boolean; onChange: (value: boolean) => void; label: string; disabled?: boolean }) {
   return (
     <label style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, cursor: 'pointer' }}>
       <span style={{ fontSize: 12.5 }}>{label}</span>
-      <button type="button" role="switch" aria-checked={checked} aria-label={label} className={cn('toggle', checked && 'on')} onClick={() => onChange(!checked)} />
+      <button type="button" role="switch" aria-checked={checked} aria-label={label} disabled={disabled} className={cn('toggle', checked && 'on')} onClick={() => onChange(!checked)} />
     </label>
   );
 }

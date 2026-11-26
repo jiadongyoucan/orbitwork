@@ -17,9 +17,7 @@ Workspace
   文件         Workspace files
   记忆         Workspace memory
 Management
-  模型与 Provider  Provider, model, default model, connection health (admin)
-  成员与权限
-  工作区设置
+  账号与安全（用户菜单）  工作区 / 成员与权限 / 登录安全
   平台管理     Platform admin only
 ```
 

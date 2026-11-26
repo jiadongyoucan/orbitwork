@@ -1,15 +1,15 @@
 import { useEffect, useState, type ReactNode } from 'react';
 import { Link, NavLink, Navigate, useLocation, useNavigate } from 'react-router-dom';
 import {
-  Boxes, ChevronDown, ChevronRight, Cpu, FolderOpen, LayoutDashboard, LogOut, Menu,
-  Plus, Settings, Shield, Store, Users, X, Bot, BrainCircuit, Code2,
+  Boxes, ChevronDown, ChevronRight, FolderOpen, LayoutDashboard, LogOut, Menu,
+  Plus, Settings, Shield, Store, X, Bot, BrainCircuit, Code2,
 } from 'lucide-react';
 import { api, errorMessage } from '@/lib/api';
 import { useAuth } from '@/context/AuthContext';
 import { useToast } from '@/context/ToastContext';
 import { Avatar, Logo, LogoMark, Modal, PageLoader, Spinner, Toggle, Field } from '@/components/UI';
 import { Icon } from '@/components/Icon';
-import { cn, initials, relativeTime } from '@/lib/utils';
+import { cn, initials } from '@/lib/utils';
 
 const PRIMARY_NAV = [
   { to: '/app', label: '工作台', icon: LayoutDashboard, end: true },
@@ -24,11 +24,7 @@ const TOOL_NAV = [
   { to: '/app/sandbox', label: '代码沙箱', icon: Code2 },
 ];
 
-const MANAGE_NAV = [
-  { to: '/app/models', label: '模型与 Provider', icon: Cpu, adminOnly: true },
-  { to: '/app/members', label: '成员与权限', icon: Users },
-  { to: '/app/settings', label: '工作区设置', icon: Settings },
-];
+
 
 function WorkspaceBadge({ name, size = 28 }: { name: string; size?: number }) {
   return <span className="workspace-avatar" style={{ width: size, height: size }}>{initials(name).slice(0, 1)}</span>;
@@ -79,9 +75,8 @@ export function AppShell({ children }: { children: ReactNode }) {
     return <Navigate to={`/login?next=${encodeURIComponent(location.pathname)}`} replace />;
   }
 
-  const currentLabel = [...PRIMARY_NAV, ...TOOL_NAV, ...MANAGE_NAV].find((item) => item.to === location.pathname)?.label
-    ?? (['/app/experts', '/app/skills', '/app/connectors'].includes(location.pathname) ? '能力库' : location.pathname.startsWith('/app/c/') ? '对话' : location.pathname === '/app/admin' ? '平台管理' : '工作台');
-  const isAdmin = workspace ? workspace.role === 'owner' || workspace.role === 'admin' : false;
+  const currentLabel = [...PRIMARY_NAV, ...TOOL_NAV].find((item) => item.to === location.pathname)?.label
+    ?? (location.pathname === '/app/models' ? '模型与 Provider' : location.pathname === '/app/settings' || location.pathname === '/app/members' ? '账号与安全' : ['/app/experts', '/app/skills', '/app/connectors'].includes(location.pathname) ? '能力库' : location.pathname.startsWith('/app/c/') ? '对话' : location.pathname === '/app/admin' ? '平台管理' : '工作台');
   const navActive = (to: string, match: string[] = []) => location.pathname === to || match.includes(location.pathname) || (to !== '/app' && location.pathname.startsWith(`${to}/`));
 
   if (!workspace) {
@@ -160,26 +155,13 @@ export function AppShell({ children }: { children: ReactNode }) {
             ))}
           </nav>
 
-          <div className="nav-label"><span>管理</span></div>
-          <nav className="nav-group">
-            {MANAGE_NAV.filter((item) => !item.adminOnly || isAdmin).map(({ to, label, icon: NavIcon }) => (
-              <NavLink key={to} to={to} className={cn('nav-item', navActive(to) && 'active')}>
-                <NavIcon size={15} /><span>{label}</span>
-              </NavLink>
-            ))}
-            {user.platformRole === 'admin' && (
-              <NavLink to="/app/admin" className={cn('nav-item', navActive('/app/admin') && 'active')}>
-                <Shield size={15} /><span>平台管理</span>
-              </NavLink>
-            )}
-          </nav>
         </div>
 
         <div className="sidebar-footer" style={{ position: 'relative' }}>
           {userMenu && (
             <div className="card" style={{ position: 'absolute', bottom: 'calc(100% + 6px)', left: 0, right: 0, zIndex: 70, padding: 5, boxShadow: '0 18px 50px rgba(0,0,0,.45)' }}>
-              {isAdmin && <Link to="/app/models" className="nav-item"><Cpu size={14} />模型与 Provider</Link>}
               <Link to="/app/settings" className="nav-item"><Settings size={14} />账号与安全</Link>
+              {user.platformRole === 'admin' && <Link to="/app/admin" className="nav-item"><Shield size={14} />平台管理</Link>}
               <button className="nav-item" onClick={() => void logout()}><LogOut size={14} />退出登录</button>
             </div>
           )}

@@ -13,7 +13,6 @@ import MarketPage from '@/pages/Market';
 import MemoriesPage from '@/pages/Memories';
 import FilesPage from '@/pages/Files';
 import SandboxPage from '@/pages/Sandbox';
-import MembersPage from '@/pages/Members';
 import SettingsPage from '@/pages/Settings';
 import ModelsPage from '@/pages/Models';
 import AdminPage from '@/pages/Admin';
@@ -71,7 +70,7 @@ export default function App() {
               <Route path="memories" element={<MemoriesPage />} />
               <Route path="files" element={<FilesPage />} />
               <Route path="sandbox" element={<SandboxPage />} />
-              <Route path="members" element={<MembersPage />} />
+              <Route path="members" element={<Navigate to="/app/settings?tab=members" replace />} />
               <Route path="settings" element={<SettingsPage />} />
               <Route path="models" element={<ModelsPage />} />
               <Route path="admin" element={<AdminPage />} />

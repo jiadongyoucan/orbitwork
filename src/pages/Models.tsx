@@ -1,7 +1,8 @@
 import { useEffect, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import {
   Check, CheckCircle2, Cpu, ExternalLink, KeyRound, Loader2, Pencil, Plus, RefreshCw,
-  Server, ShieldCheck, Trash2, Zap,
+  ArrowLeft, Server, ShieldCheck, Trash2, Zap,
 } from 'lucide-react';
 import { api, errorMessage } from '@/lib/api';
 import { useAuth } from '@/context/AuthContext';
@@ -27,6 +28,7 @@ type ModelForm = { providerId: string; modelId: string; label: string; contextWi
 export default function ModelsPage() {
   const { workspace, user } = useAuth();
   const toast = useToast();
+  const navigate = useNavigate();
   const [settings, setSettings] = useState<ModelSettings | null>(null);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState('');
@@ -195,8 +197,7 @@ export default function ModelsPage() {
       <PageHeader
         eyebrow="Models & Providers"
         title="模型与 Provider"
-        subtitle="配置 OpenAI 兼容的模型服务。API Key 只在服务端加密保存，不会返回给浏览器。"
-        actions={<><button className="btn" onClick={() => void load()}><RefreshCw size={14} />刷新</button><button className="btn btn-primary" onClick={openCreateProvider}><Plus size={14} />添加 Provider</button></>}
+        actions={<><button className="btn" onClick={() => navigate('/app/settings?tab=workspace')}><ArrowLeft size={14} />返回</button><button className="btn" onClick={() => void load()}><RefreshCw size={14} />刷新</button><button className="btn btn-primary" onClick={openCreateProvider}><Plus size={14} />添加 Provider</button></>}
       />
 
       {loading ? <div className="skeleton" style={{ height: 260 }} /> : loadError ? <div className="card"><ErrorState message={loadError} onRetry={() => void load()} /></div> : settings && (
@@ -219,7 +220,7 @@ export default function ModelsPage() {
           <div className="model-layout">
             <section className="card model-panel">
               <div className="model-panel-head">
-                <div><h2>Provider</h2><p>API 网关、公司内网或本地模型服务。</p></div>
+                <div><h2 title="支持任意 OpenAI 兼容接口">Provider <span className="help-dot" title="支持 DeepSeek、OpenAI、OpenRouter、私网或本地接口">?</span></h2></div>
                 <button className="btn btn-sm" onClick={openCreateProvider}><Plus size={13} />添加</button>
               </div>
               {settings.providers.length === 0 ? (
@@ -249,12 +250,11 @@ export default function ModelsPage() {
                   </div>
                 </div>
               ))}
-              <div className="model-security-note"><ShieldCheck size={13} /><span>API Key 使用 AES-256-GCM 加密保存；仅在服务端调用模型时解密。</span></div>
             </section>
 
             <section className="card model-panel">
               <div className="model-panel-head">
-                <div><h2>模型</h2><p>启用后出现在新对话的模型选择器中。</p></div>
+                <div><h2>模型</h2></div>
                 <button className="btn btn-sm" onClick={openCreateModel} disabled={!settings.providers.length}><Plus size={13} />添加模型</button>
               </div>
               {settings.models.length === 0 ? (

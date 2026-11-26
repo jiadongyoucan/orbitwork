@@ -168,3 +168,12 @@ Target verification: 58/58 tests, typecheck clean, production build; live API sh
 **Implementation review:** CONDITIONAL → GO after fixes. HIGH-1: chats 6–100 were unreachable after removing sidebar recents → “查看全部” two-tab manager over `/chats?limit=100` and `?archived=1`. HIGH-2: action icons were hover-only/low contrast → always visible, `--muted`, 32px (36px mobile), 4px gap. HIGH-3: archived manager and delete confirmation stacked → manager unmounts while confirmation is open and remounts on cancel/confirm.
 
 **Verification:** 71/71 tests (new archive → hide → restore → delete API regression), typecheck clean, production build; browser probe confirms sidebar has no recent/new-chat duplicate, archive hides the row, archived modal exposes restore, delete uses a confirmation dialog, 0 console errors; desktop and 390px screenshots captured.
+
+
+## G11 — v2.2 account & security hub (2026-11-26)
+
+**Scope:** remove sidebar entries for models, workspace settings and members; move members into the user-menu “账号与安全” settings module; remove descriptive clutter/duplicate entry points and simplify the page into 工作区 / 成员与权限 / 登录安全 tabs.
+
+**Implementation review:** CONDITIONAL → GO after fixes. HIGH: members exposed admin controls to platform admins without workspace role → workspace role only; file empty-state linked to settings default tab instead of workspace tab → `?tab=workspace`; non-admin toggles were silent no-ops → workspace tab admin-only + `Toggle disabled`; default model had two controls → Models page only; settings save blanked the page → loaded-workspace ref; model page was a nav dead end → breadcrumb + return. Optional stale default PATCH removed.
+
+**Verification:** 71/71 tests, typecheck clean, production build; browser probe confirms sidebar has only 工作/工具 groups, user menu has one settings entry, `/app/members` redirects to the members tab, settings shows three tabs, 0 console errors; desktop screenshots for all three tabs.

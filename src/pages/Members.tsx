@@ -1,5 +1,4 @@
 import { useEffect, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
 import {
   Activity, Calendar, Check, Clipboard, Clock3, Copy, KeyRound, Mail, MoreHorizontal, Plus,
   RefreshCw, Shield, ShieldCheck, Trash2, UserMinus, UserPlus, Users,
@@ -8,13 +7,12 @@ import { api, errorMessage } from '@/lib/api';
 import { useAuth } from '@/context/AuthContext';
 import { useToast } from '@/context/ToastContext';
 import type { AuditLog, Invite, Member } from '@/lib/types';
-import { Avatar, Badge, ConfirmModal, CopyButton, EmptyState, Field, Modal, PageHeader, Spinner } from '@/components/UI';
+import { Avatar, Badge, ConfirmModal, CopyButton, EmptyState, Field, Modal, Spinner } from '@/components/UI';
 import { cn, formatDate } from '@/lib/utils';
 
-export default function MembersPage() {
+export function MembersPanel() {
   const { workspace, user } = useAuth();
   const toast = useToast();
-  const navigate = useNavigate();
   const [tab, setTab] = useState<'members' | 'audit'>('members');
   const [members, setMembers] = useState<Member[]>([]);
   const [invites, setInvites] = useState<Invite[]>([]);
@@ -28,7 +26,7 @@ export default function MembersPage() {
   const [removing, setRemoving] = useState<Member | null>(null);
   const [removeLoading, setRemoveLoading] = useState(false);
 
-  const isAdmin = myRole === 'owner' || myRole === 'admin' || user?.platformRole === 'admin';
+  const isAdmin = myRole === 'owner' || myRole === 'admin';
 
   async function load() {
     if (!workspace) return;
@@ -99,19 +97,23 @@ export default function MembersPage() {
 
   const roleLabel = (role: string) => role === 'owner' ? '所有者' : role === 'admin' ? '管理员' : '成员';
 
-  return (
-    <div className="page-wrap fade-in">
-      <PageHeader
-        eyebrow="Access control"
-        title="成员与权限"
-        subtitle="成员只能看到自己的工作区数据；会话默认仅创建者可见。管理员可治理工作区。"
-        actions={isAdmin ? <button className="btn btn-primary" onClick={() => { setInviteUrl(''); setInviteForm({ email: '', role: 'member' }); setInviteOpen(true); }}><UserPlus size={14} />邀请成员</button> : undefined}
-      />
+  function openInvite() {
+    setInviteUrl('');
+    setInviteForm({ email: '', role: 'member' });
+    setInviteOpen(true);
+  }
 
-      <div className="tabs">
-        <button className={cn('tab', tab === 'members' && 'active')} onClick={() => setTab('members')}>成员与邀请</button>
-        {isAdmin && <button className={cn('tab', tab === 'audit' && 'active')} onClick={() => setTab('audit')}>审计日志</button>}
-      </div>
+  return (
+    <div className="fade-in">
+      {isAdmin && (
+        <div className="panel-toolbar">
+          <div className="tabs" style={{ margin: 0, borderBottom: 0 }}>
+            <button className={cn('tab', tab === 'members' && 'active')} onClick={() => setTab('members')}>成员</button>
+            <button className={cn('tab', tab === 'audit' && 'active')} onClick={() => setTab('audit')}>审计日志</button>
+          </div>
+          <button className="btn btn-primary btn-sm" onClick={openInvite}><UserPlus size={13} />邀请成员</button>
+        </div>
+      )}
 
       {tab === 'members' ? (
         <>
@@ -120,7 +122,6 @@ export default function MembersPage() {
               <div className="card" style={{ marginBottom: 18 }}>
                 <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '13px 16px', borderBottom: '1px solid var(--line)' }}>
                   <div style={{ display: 'flex', alignItems: 'center', gap: 7, fontSize: 12, fontWeight: 600 }}><Users size={14} />{members.length} 位成员</div>
-                  <Badge tone="muted">角色：{roleLabel(myRole)}</Badge>
                 </div>
                 {members.map((member) => (
                   <div className="list-row" key={member.id}>
@@ -149,7 +150,6 @@ export default function MembersPage() {
               <div className="card">
                 <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '13px 16px', borderBottom: '1px solid var(--line)' }}>
                   <div style={{ display: 'flex', alignItems: 'center', gap: 7, fontSize: 12, fontWeight: 600 }}><Mail size={14} />待接受的邀请</div>
-                  {isAdmin && <button className="btn btn-sm" onClick={() => { setInviteUrl(''); setInviteOpen(true); }}><Plus size={12} />新建邀请</button>}
                 </div>
                 {invites.length === 0 ? <div className="empty" style={{ padding: 28 }}>没有待接受的邀请</div> : invites.map((invite) => (
                   <div className="list-row" key={invite.id}>

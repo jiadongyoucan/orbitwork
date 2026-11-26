@@ -34,6 +34,7 @@ export default function FilesPage() {
   const [deleteLoading, setDeleteLoading] = useState(false);
 
   const filesDisabled = workspace?.settings.filesEnabled === false;
+  const isAdmin = workspace?.role === 'owner' || workspace?.role === 'admin';
 
   async function load() {
     if (!workspace) return;
@@ -134,7 +135,7 @@ export default function FilesPage() {
             icon={<Lock size={20} />}
             title="管理员已关闭工作区文件"
             description="开启后即可上传资料，智能体也会恢复 list_files / read_file / write_file 工具。"
-            action={<Link className="btn btn-sm btn-primary" to="/app/settings">前往工作区设置</Link>}
+            action={isAdmin ? <Link className="btn btn-sm btn-primary" to="/app/settings?tab=workspace">前往账号与安全</Link> : <span className="hint">请联系管理员开启</span>}
           />
         </div>
       </div>

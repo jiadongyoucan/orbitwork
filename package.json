@@ -1,6 +1,6 @@
 {
   "name": "orbitwork",
-  "version": "2.1.0",
+  "version": "2.2.0",
   "private": true,
   "type": "module",
   "description": "OrbitWork — multi-tenant AI agent workspace, marketplace and extensibility platform",
