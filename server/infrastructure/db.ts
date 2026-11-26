@@ -306,6 +306,43 @@ CREATE INDEX IF NOT EXISTS idx_trace_chat ON trace_events(chat_id, seq);
       if (!columns.some((column) => column.name === 'reasoning_ms')) db.exec('ALTER TABLE messages ADD COLUMN reasoning_ms INTEGER NOT NULL DEFAULT 0');
     },
   },
+  {
+    version: 5,
+    name: 'workspace model providers',
+    sql: `
+CREATE TABLE IF NOT EXISTS providers (
+  id TEXT PRIMARY KEY,
+  workspace_id TEXT NOT NULL REFERENCES workspaces(id) ON DELETE CASCADE,
+  name TEXT NOT NULL,
+  type TEXT NOT NULL DEFAULT 'openai-compatible',
+  base_url TEXT NOT NULL,
+  api_key_encrypted TEXT NOT NULL DEFAULT '',
+  enabled INTEGER NOT NULL DEFAULT 1,
+  created_by TEXT NOT NULL REFERENCES users(id),
+  created_at INTEGER NOT NULL,
+  updated_at INTEGER NOT NULL,
+  UNIQUE(workspace_id, name)
+);
+CREATE INDEX IF NOT EXISTS idx_providers_ws ON providers(workspace_id, created_at);
+
+CREATE TABLE IF NOT EXISTS workspace_models (
+  id TEXT PRIMARY KEY,
+  workspace_id TEXT NOT NULL REFERENCES workspaces(id) ON DELETE CASCADE,
+  provider_id TEXT NOT NULL REFERENCES providers(id) ON DELETE CASCADE,
+  model_id TEXT NOT NULL,
+  label TEXT NOT NULL,
+  context_window INTEGER NOT NULL DEFAULT 128000,
+  enabled INTEGER NOT NULL DEFAULT 1,
+  is_default INTEGER NOT NULL DEFAULT 0,
+  created_by TEXT NOT NULL REFERENCES users(id),
+  created_at INTEGER NOT NULL,
+  updated_at INTEGER NOT NULL,
+  UNIQUE(workspace_id, model_id)
+);
+CREATE INDEX IF NOT EXISTS idx_workspace_models_ws ON workspace_models(workspace_id, created_at);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_workspace_models_default ON workspace_models(workspace_id) WHERE is_default = 1;
+`,
+  },
 ];
 
 function runMigrations(db: DB): void {

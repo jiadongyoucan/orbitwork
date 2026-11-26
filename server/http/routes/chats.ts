@@ -5,9 +5,9 @@ import { json, now } from '../../infrastructure/db.js';
 import { audit, requireWorkspace } from '../context.js';
 import { badRequest, conflict, notFound } from '../../domain/errors.js';
 import { chatInputSchema, messageInputSchema } from '../../domain/schemas.js';
-import { assertModel, createRun, ensureChat, runAgent, cancelRun, expireStaleRuns, isRunActive, type RuntimeEvent } from '../../application/agent-runtime.js';
+import { createRun, ensureChat, runAgent, cancelRun, expireStaleRuns, isRunActive, type RuntimeEvent } from '../../application/agent-runtime.js';
+import { listEffectiveModels, resolveWorkspaceModel } from '../../application/model-registry.js';
 import { checkRateKey } from '../rate-limit.js';
-import { defaultModel, models } from '../../config.js';
 import { listTrace } from '../../infrastructure/trace.js';
 
 function sse(reply: FastifyReply, seq: { value: number }, event: RuntimeEvent | { type: string; [key: string]: unknown }) {
@@ -46,8 +46,9 @@ export async function chatRoutes(app: FastifyInstance, db: DB) {
       agentId = agent.id;
       agentModel = agent.model;
     }
-    const requested = input.model || agentModel || String(ctx.workspace.settings.defaultModel ?? '') || defaultModel();
-    const model = assertModel(requested);
+    const requested = input.model || agentModel || String(ctx.workspace.settings.defaultModel ?? '');
+    if (input.model && !listEffectiveModels(db, ctx.workspace.id).some((item) => item.id === input.model)) throw badRequest('模型不在允许列表内');
+    const model = resolveWorkspaceModel(db, ctx.workspace.id, requested).id;
     const id = randomUUID();
     const timestamp = now();
     db.prepare(
@@ -120,7 +121,8 @@ export async function chatRoutes(app: FastifyInstance, db: DB) {
     if (running) throw conflict('该会话正在生成回复，请稍候或取消当前运行');
     const userMessageId = randomUUID();
     const timestamp = now();
-    const model = assertModel(chat.model || defaultModel());
+    const resolved = resolveWorkspaceModel(db, ctx.workspace.id, chat.model || '');
+    const model = resolved.id;
     const runId = createRun(db, ctx, { ...chat, model }, model);
     db.prepare(
       `INSERT INTO messages (id, chat_id, workspace_id, role, content, status, model, created_at)
@@ -192,7 +194,7 @@ export async function chatRoutes(app: FastifyInstance, db: DB) {
     const rows = db
       .prepare('SELECT id, chat_id, status, model, tokens_in, tokens_out, started_at, finished_at FROM runs WHERE workspace_id = ? AND user_id = ? ORDER BY started_at DESC LIMIT 30')
       .all(ctx.workspace.id, ctx.user.id);
-    return { runs: rows, models: models() };
+    return { runs: rows, models: listEffectiveModels(db, ctx.workspace.id) };
   });
 
 function loadTracePayload(db: DB, workspaceId: string, userId: string, chatId: string, limit: number) {

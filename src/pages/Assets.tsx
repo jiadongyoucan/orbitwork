@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { NavLink, useNavigate } from 'react-router-dom';
 import {
   BookOpen, Check, ChevronRight, CloudUpload, Code2, ExternalLink, Globe2, KeyRound, Plus,
   Rocket, Send, Sparkles, Store, Trash2, Wand2, Wrench, X,
@@ -94,7 +94,7 @@ function AssetPage({ scope }: { scope: 'experts' | 'skills' | 'connectors' }) {
     try {
       const [assetData, modelData, settingData] = await Promise.all([
         api.get<{ assets: Asset[] }>(`/api/w/${workspace.id}/assets?kind=${meta.kind}`),
-        api.get<{ models: ModelOption[] }>('/api/models'),
+        api.get<{ models: ModelOption[] }>(`/api/w/${workspace.id}/models`),
         api.get<{ role: string; settings: { allowMemberPublish?: boolean } }>(`/api/w/${workspace.id}/settings`),
       ]);
       setAssets(assetData.assets);
@@ -220,9 +220,9 @@ function AssetPage({ scope }: { scope: 'experts' | 'skills' | 'connectors' }) {
   return (
     <div className="page-wrap fade-in">
       <PageHeader
-        eyebrow={meta.eyebrow}
-        title={meta.title}
-        subtitle={meta.subtitle}
+        eyebrow="Capability library"
+        title="能力库"
+        subtitle="专家、技能与连接器。创建自己的方法，或从市场安装团队验证过的能力。"
         actions={
           <>
             <button className="btn" onClick={() => navigate('/app/market')}><Store size={14} />从市场安装</button>
@@ -230,6 +230,13 @@ function AssetPage({ scope }: { scope: 'experts' | 'skills' | 'connectors' }) {
           </>
         }
       />
+      <div className="capability-tabs">
+        {(['experts', 'skills', 'connectors'] as const).map((key) => (
+          <NavLink key={key} to={`/app/${key}`} className={({ isActive }) => cn('capability-tab', isActive && 'active')}>
+            {CONFIG[key].title}
+          </NavLink>
+        ))}
+      </div>
 
       {loading ? (
         <div className="grid-3">{Array.from({ length: 3 }).map((_, index) => <div className="skeleton" key={index} style={{ height: 180 }} />)}</div>

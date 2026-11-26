@@ -153,7 +153,7 @@ export default function ChatPage() {
 
   useEffect(() => {
     void load();
-    api.get<{ models: ModelOption[]; demo: boolean }>('/api/models').then((data) => { setModels(data.models); setDemo(data.demo); }).catch(() => undefined);
+    if (workspace) api.get<{ models: ModelOption[]; demo: boolean }>(`/api/w/${workspace.id}/models`).then((data) => { setModels(data.models); setDemo(data.demo); }).catch(() => undefined);
     hasLoaded.current = true;
     initialSent.current = false;
     return () => {
@@ -296,7 +296,10 @@ export default function ChatPage() {
     );
   }
 
-  const modelLabel = models.find((item) => item.id === detail.chat.model)?.label ?? detail.chat.model;
+  const selectedModel = models.find((item) => item.id === detail.chat.model);
+  const modelLabel = selectedModel?.label ?? detail.chat.model;
+  const chatDemo = selectedModel ? Boolean(selectedModel.demo) : models.length === 0 ? true : demo;
+  const modelSettingsPath = workspace?.role === 'owner' || workspace?.role === 'admin' ? '/app/models' : '/app/settings';
   const hasMessages = messages.length > 0;
 
   return (
@@ -325,7 +328,7 @@ export default function ChatPage() {
           </div>
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-          {demo && <Link to="/app/settings" className="badge badge-warn" title="未配置模型"><Zap size={10} />DEMO</Link>}
+          {chatDemo && <Link to={modelSettingsPath} className="badge badge-warn" title="当前模型未配置 API Key"><Zap size={10} />DEMO</Link>}
           <span className="badge badge-muted"><Cpu size={10} />{modelLabel}</span>
           <button className="btn btn-ghost btn-icon" onClick={() => setTraceOpen(true)} aria-label="查看对话轨迹" title="对话轨迹"><Activity size={15} /></button>
           <button className="btn btn-ghost btn-icon" onClick={() => void load(true)} aria-label="刷新"><RefreshCw size={15} /></button>

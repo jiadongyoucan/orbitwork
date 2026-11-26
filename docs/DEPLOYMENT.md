@@ -155,6 +155,16 @@ Compose 拓扑：
 - `app` 的 SQLite 数据在 `orbit_data` 命名卷；
 - sandbox 只读根文件系统，`/tmp` 为 tmpfs，cap_drop ALL，pids/memory/cpu 限制。
 
+## 4.1 模型与 Provider（可选，推荐通过 UI 配置）
+
+部署环境变量 `LLM_*` 是平台默认兜底。登录为工作区所有者/管理员后，在「模型与 Provider」中添加 OpenAI 兼容服务：
+
+1. 添加 Provider：名称、Base URL、API Key。
+2. 添加模型：上游 model ID、显示名、上下文窗口，设为默认。
+3. 用「测试」检查 Provider 连接；密钥不会返回浏览器。
+
+本地 Ollama 等私网 Provider 需要设置 `ALLOW_PRIVATE_PROVIDERS=true`；生产默认关闭。
+
 ## 5. 验收与安全冒烟
 
 ```bash

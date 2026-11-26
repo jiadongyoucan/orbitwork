@@ -161,3 +161,35 @@ export function validateAssetPayload(kind: AssetKind, payload: Record<string, un
   }
   return assetPayloadSchemas[kind].parse(payload) as Record<string, unknown>;
 }
+
+export const providerInputSchema = z
+  .object({
+    name: z.string().trim().min(2).max(60),
+    baseUrl: z.string().trim().url().max(500),
+    apiKey: z.string().trim().max(4000).optional(),
+    enabled: z.boolean().default(true),
+  })
+  .strict();
+
+export const providerPatchSchema = z
+  .object({
+    name: z.string().trim().min(2).max(60).optional(),
+    baseUrl: z.string().trim().url().max(500).optional(),
+    apiKey: z.string().trim().max(4000).optional(),
+    clearKey: z.boolean().optional(),
+    enabled: z.boolean().optional(),
+  })
+  .strict();
+
+export const modelInputSchema = z
+  .object({
+    providerId: z.string().min(1).max(64),
+    modelId: z.string().trim().min(1).max(200).regex(/^[A-Za-z0-9._:/@-]+$/),
+    label: z.string().trim().min(1).max(80),
+    contextWindow: z.number().int().min(4096).max(2_000_000).default(128000),
+    enabled: z.boolean().default(true),
+    isDefault: z.boolean().default(false),
+  })
+  .strict();
+
+export const modelPatchSchema = modelInputSchema.partial().strict();

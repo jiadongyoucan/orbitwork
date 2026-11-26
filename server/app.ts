@@ -17,6 +17,7 @@ import { assetRoutes } from './http/routes/assets.js';
 import { chatRoutes } from './http/routes/chats.js';
 import { adminRoutes } from './http/routes/admin.js';
 import { miscRoutes } from './http/routes/misc.js';
+import { modelRoutes } from './http/routes/models.js';
 import { seedDatabase } from './seed.js';
 import { reconcileRunsOnBoot } from './application/agent-runtime.js';
 
@@ -101,6 +102,7 @@ export async function createApp(options: AppOptions = {}): Promise<FastifyInstan
   app.addHook('onClose', async () => db.close());
 
   await miscRoutes(app, db);
+  await modelRoutes(app, db);
   await authRoutes(app, db);
   await workspaceRoutes(app, db);
   await agentRoutes(app, db);

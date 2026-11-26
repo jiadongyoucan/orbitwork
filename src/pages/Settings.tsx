@@ -36,7 +36,7 @@ export default function SettingsPage() {
     setLoading(true);
     Promise.all([
       api.get<{ settings: SettingsState }>(`/api/w/${workspace.id}/settings`),
-      api.get<{ models: ModelOption[]; demo: boolean }>('/api/models'),
+      api.get<{ models: ModelOption[]; demo: boolean }>(`/api/w/${workspace.id}/models`),
     ])
       .then(([settingData, modelData]) => {
         setSettings({
@@ -113,11 +113,13 @@ export default function SettingsPage() {
             <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 16 }}>
               <Cpu size={15} color="var(--accent)" /><span style={{ fontSize: 13, fontWeight: 650 }}>模型与能力</span>
               {demo && <Badge tone="warn"><Zap size={9} />演示模式</Badge>}
+              {isAdmin && <button className="btn btn-sm btn-ghost" style={{ marginLeft: 'auto' }} onClick={() => navigate('/app/models')}>管理 Provider</button>}
             </div>
             <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
               <Field label="默认模型" hint="新会话默认使用；仍可在创建会话时覆盖。服务端会拒绝不在允许列表内的模型。">
                 <select className="select" disabled={!isAdmin} value={settings.defaultModel} onChange={(event) => setSettings({ ...settings, defaultModel: event.target.value })}>
-                  {models.map((model) => <option key={model.id} value={model.id}>{model.label} — {model.id}</option>)}
+                  {!models.length && <option value="">未配置模型</option>}
+                  {models.map((model) => <option key={model.id} value={model.id}>{model.label}{model.providerName ? ` · ${model.providerName}` : ''}</option>)}
                 </select>
               </Field>
               <div style={{ display: 'flex', flexDirection: 'column', gap: 12, borderTop: '1px solid var(--line)', paddingTop: 14 }}>

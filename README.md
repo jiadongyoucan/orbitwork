@@ -10,7 +10,8 @@
 
 OrbitWork 是一个可以在一台云主机上运行的团队 AI 工作台。它把 DeepSeek Harness 式的工作区原语（会话、模型、记忆、沙箱、工作区）与 WorkBuddy 式的任务体验组合起来，并增加了可发布、可安装的能力市场：
 
-- **智能体工作台**：新建会话、SSE 流式、工具调用、取消、模型切换、Token 用量；会话仅创建者可见。
+- **智能体工作台**：一个主输入框、原生模型/智能体选择、SSE 流式、工具调用、取消、Token 用量；会话仅创建者可见。
+- **模型与 Provider（v2.0）**：工作区管理员可配置 OpenAI 兼容 Provider、模型、上下文窗口与默认项；API Key 使用 AES-256-GCM + AAD 加密，只写不读。未配置时回退到环境变量 `LLM_*`。
 - **记忆**：显式事实卡、关键词注入、`save_memory` 工具、对象级授权。
 - **受限脚本执行（沙箱）**：独立 worker、串行、6 秒、128MB 上限；生产环境使用文件队列 + `network:none` 容器。定位是**内部半可信脚本**，不是「可运行用户上传代码」的安全沙箱。
 - **LLM 接入层（v1.3）**：`LlmPort` 单实现 + `LLM_ADAPTER=legacy|port` 灰度；推理字段归一（reasoning_content/reasoning/thinking/thought）、首包前重试与退避、usage 含 cached tokens。
@@ -21,6 +22,16 @@ OrbitWork 是一个可以在一台云主机上运行的团队 AI 工作台。它
 - **专家 / 技能 / 连接器**：可创建、发布、安装、收藏；专家一键启用为智能体。
 - **插件市场**：把能力打包为插件，一键安装；不可变版本快照；管理员下架/恢复/精选。
 - **多租户与治理**：scrypt 密码、服务端会话、工作区 RBAC、邀请、审计、平台管理后台。
+
+## 配置 Provider / 模型
+
+进入「模型与 Provider」，添加任意 OpenAI 兼容服务：
+
+- Base URL：例如 `https://api.deepseek.com/v1`
+- API Key：加密保存，保存后 API 只返回 `hasKey`
+- 模型 ID：例如 `deepseek-chat`，再设置展示名、上下文窗口和默认项
+
+Provider 的 API Key 不会出现在浏览器响应、审计或轨迹中。没有添加 Provider 时，应用使用部署环境变量 `LLM_*` 作为“平台默认”。
 
 ## 快速开始（本地 Docker）
 
@@ -95,7 +106,7 @@ npm run dev
 
 ```bash
 npm run typecheck      # tsc --noEmit
-NODE_ENV=test npm test # 63 项领域 + API 集成测试
+NODE_ENV=test npm test # 70 项领域 + API 集成测试
 npm run build          # 生产客户端 + 服务端 bundle
 npm run start          # node dist/server.js（读取 .env）
 ```
@@ -124,6 +135,7 @@ Caddy (TLS, SSE-friendly)
 - [文档封面](docs/index.html)
 - [部署手册](docs/DEPLOYMENT.md)
 - [评审记录](docs/REVIEW.md)
+- [UI 与 Provider 设计](docs/DESIGN-ui-model-config.md)
 - [架构笔记](docs/ARCHITECTURE.md)
 
 ## 安全说明
@@ -151,7 +163,7 @@ Caddyfile
 
 ## 版本与交付包
 
-仓库使用 Git 管理，当前版本 `v1.3.0`（标签 `v1.3.0`）。
+仓库使用 Git 管理，当前版本 `v2.0.0`（标签 `v2.0.0`）。
 
 ```bash
 git log --oneline        # 提交历史

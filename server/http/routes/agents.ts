@@ -5,7 +5,7 @@ import { json, now } from '../../infrastructure/db.js';
 import { audit, requireWorkspace } from '../context.js';
 import { badRequest, conflict, notFound } from '../../domain/errors.js';
 import { agentInputSchema } from '../../domain/schemas.js';
-import { models } from '../../config.js';
+import { listEffectiveModels } from '../../application/model-registry.js';
 
 type AgentRow = {
   id: string;
@@ -74,7 +74,7 @@ export async function agentRoutes(app: FastifyInstance, db: DB) {
   app.post('/api/w/:workspaceId/agents', async (request) => {
     const ctx = requireWorkspace(request, db);
     const input = agentInputSchema.parse(request.body ?? {});
-    if (input.model && !models().some((m) => m.id === input.model)) throw badRequest('模型不在允许列表内');
+    if (input.model && !listEffectiveModels(db, ctx.workspace.id).some((m) => m.id === input.model)) throw badRequest('模型不在允许列表内');
     validateRelations(db, ctx.workspace.id, input.skillIds, input.connectorIds);
     const id = randomUUID();
     const timestamp = now();
@@ -99,7 +99,7 @@ export async function agentRoutes(app: FastifyInstance, db: DB) {
     if (!existing) throw notFound('智能体不存在');
     if (existing.created_by !== ctx.user.id && ctx.role === 'member') throw conflict('只能修改自己创建的智能体');
     const patch = agentInputSchema.partial().parse(request.body ?? {});
-    if (patch.model && !models().some((m) => m.id === patch.model)) throw badRequest('模型不在允许列表内');
+    if (patch.model && !listEffectiveModels(db, ctx.workspace.id).some((m) => m.id === patch.model)) throw badRequest('模型不在允许列表内');
     if (patch.skillIds || patch.connectorIds) {
       validateRelations(db, ctx.workspace.id, patch.skillIds ?? [], patch.connectorIds ?? []);
     }

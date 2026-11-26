@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
-<title>OrbitWork · 架构与技术文档</title>
+<title>OrbitWork 2.0 · 架构与技术文档</title>
 <meta name="description" content="OrbitWork 架构选型、数据模型、安全模型、智能体运行时、测试与阿里云 Docker 部署手册。" />
 <link rel="stylesheet" href="./doc.css" />
 </head>
@@ -30,6 +30,7 @@
     <a href="#data">数据模型</a>
     <a href="#tenancy">租户与权限</a>
     <a href="#auth">认证与会话</a>
+    <a href="#models">模型与 Provider</a>
     <a href="#runtime">智能体运行时</a>
     <a href="#sse">SSE 生命周期</a>
     <a href="#market">市场与版本</a>
@@ -49,10 +50,10 @@
 
   <main class="doc-main">
     <div class="doc-hero">
-      <div class="doc-eyebrow">◎ Architecture & Engineering · v1.0</div>
+      <div class="doc-eyebrow">◎ Architecture & Engineering · v2.0</div>
       <h1>架构与技术文档</h1>
       <p class="doc-lead">模块化单体 + 独立沙箱 worker + SQLite WAL + Docker Compose。目标不是堆技术，而是在一台 ECS 上交付边界清晰、可测试、可运维的团队 AI 工作台。</p>
-      <div class="doc-meta"><span>Node.js 24</span><span>Fastify 5</span><span>React 19</span><span>node:sqlite</span><span>Docker Compose</span><span>23 tests</span></div>
+      <div class="doc-meta"><span>Node.js 24</span><span>Fastify 5</span><span>React 19</span><span>node:sqlite</span><span>Docker Compose</span><span>70 tests</span></div>
       <div class="doc-actions">
         <a class="btn btn-dark" href="./product.html">阅读产品文档 →</a>
         <a class="btn" href="#deploy">部署步骤</a>
@@ -146,12 +147,13 @@
   infrastructure/           db + migrations、LLM gateway、connectors、sandbox client
   http/context.ts           requireUser / requireWorkspace / audit / platformAudit
   http/rate-limit.ts        IP + 身份固定窗口
-  http/routes/              auth, workspaces, agents, chats, memories, assets, admin, misc
+  http/routes/              auth, workspaces, agents, chats, memories, assets, files, models, admin, misc
+  application/model-registry.ts  effective model resolution, provider keys, defaults
   sandbox-worker.ts         队列模式 + loopback HTTP 开发模式
 
 src/
-  pages/                    Landing, Auth, Home, Chat, Agents, Assets, Market,
-                            Memories, Sandbox, Members, Settings, Admin
+  pages/                    Landing, Auth, Home, Chat, Agents, Assets, Market, Files,
+                            Memories, Sandbox, Members, Settings, Models, Admin
   components/               AppShell, UI primitives, Markdown, Icon
   context/                  AuthContext, ToastContext
   lib/                      API client, SSE parser, types, utils
@@ -187,6 +189,8 @@ users ──&lt; platform_audit_logs</code></pre>
           <tr><td><code>assets</code></td><td>kind, payload_json, status, visibility, source_asset_id</td><td>统一资产聚合；安装克隆带来源</td></tr>
           <tr><td><code>asset_versions</code></td><td>UNIQUE(asset_id,version), snapshot_json, content_hash</td><td>不可变发布快照</td></tr>
           <tr><td><code>asset_installs</code></td><td>UNIQUE(workspace_id,asset_id), installed_asset_id FK CASCADE</td><td>安装记录；删除克隆可重装</td></tr>
+          <tr><td><code>providers</code></td><td>workspace_id, base_url, api_key_encrypted, enabled</td><td>v5：工作区模型服务；密钥 AES-GCM + AAD</td></tr>
+          <tr><td><code>workspace_models</code></td><td>provider_id FK CASCADE, model_id, context_window, is_default</td><td>v5：有效模型、默认项与上下文预算</td></tr>
           <tr><td><code>platform_audit_logs</code></td><td>actor_id, action, target</td><td>跨工作区管理动作</td></tr>
         </tbody>
       </table>
@@ -225,8 +229,29 @@ users ──&lt; platform_audit_logs</code></pre>
       </ul>
     </section>
 
+    <section id="models">
+      <div class="section-kicker">08 · Model configuration</div>
+      <h2>模型与 Provider</h2>
+      <p>模型选择从部署环境变量升级为工作区级可配置能力。数据模型新增 <code>providers</code> 与 <code>workspace_models</code>（migration v5）；工作区所有者/管理员可添加 OpenAI 兼容 Provider、模型与默认项，成员仅能读取有效模型列表。</p>
+      <pre><code>providers
+  id, workspace_id, name, type(openai-compatible), base_url,
+  api_key_encrypted(v2 AES-GCM + AAD workspace:provider), enabled, created_by
+workspace_models
+  id, workspace_id, provider_id FK CASCADE, model_id, label,
+  context_window, enabled, is_default, created_by
+  unique(workspace_id, model_id); partial unique default per workspace
+
+resolution:
+  enabled workspace_models + enabled provider
+    → base_url + decrypted key + context_window
+  zero workspace_models → env LLM_* fallback (平台默认)
+  configured but none enabled → no model (never silently use env)</code></pre>
+      <p><strong>Runtime:</strong> <code>resolveWorkspaceModel()</code> returns provider/base URL/key/context window/demo state. <code>streamModel()</code> receives an explicit adapter config for workspace providers; the default env adapter is used only for the platform fallback. Context trimming uses the selected model’s <code>context_window</code>, not a global value. Provider URL is checked at save and again before every request; redirects are rejected. Keys are write-only, encrypted with AAD, and never placed in API responses, audit metadata or trace payloads.</p>
+      <p><strong>Defaults:</strong> deleting a model/provider clears/repoints the workspace default in the same transaction; the partial unique index prevents multiple defaults. Provider test uses <code>GET /models</code> with an 8s timeout and no redirect following.</p>
+    </section>
+
     <section id="runtime">
-      <div class="section-kicker">08 · Runtime</div>
+      <div class="section-kicker">09 · Runtime</div>
       <h2>智能体运行时</h2>
       <pre><code>POST /api/w/:ws/chats/:id/messages
   │ requireWorkspace + chat.user_id + rate limit
@@ -255,7 +280,7 @@ users ──&lt; platform_audit_logs</code></pre>
     </section>
 
     <section id="sse">
-      <div class="section-kicker">09 · Streaming</div>
+      <div class="section-kicker">10 · Streaming</div>
       <h2>SSE 生命周期与边界</h2>
       <table>
         <thead><tr><th>事件</th><th>负载</th><th>用途</th></tr></thead>
@@ -272,7 +297,7 @@ users ──&lt; platform_audit_logs</code></pre>
     </section>
 
     <section id="market">
-      <div class="section-kicker">10 · Marketplace</div>
+      <div class="section-kicker">11 · Marketplace</div>
       <h2>市场、版本与安装完整性</h2>
       <pre><code>publish:
   validate(kind,payload) → snapshot JSON → sha256 → asset_versions
@@ -295,7 +320,7 @@ delete clone:
     </section>
 
     <section id="sandbox">
-      <div class="section-kicker">11 · Sandbox</div>
+      <div class="section-kicker">12 · Sandbox</div>
       <h2>沙箱威胁模型</h2>
       <div class="arch-grid">
         <div class="arch-box"><b>入口</b><span>仅 app 写入 /jobs/inbox；job 含 code 与 id</span></div>
@@ -314,7 +339,7 @@ delete clone:
     </section>
 
     <section id="network-files">
-      <div class="section-kicker">12 · Network &amp; files</div>
+      <div class="section-kicker">13 · Network &amp; files</div>
       <h2>联网与文件子系统</h2>
       <p>两个能力都实现在 app 进程内，沙箱保持 <code>network:none</code>。这样不破坏既有威胁模型，也不引入新依赖（上传走 raw body，未引入 multipart）。</p>
 
@@ -360,11 +385,11 @@ Agent ──web_fetch───► assertSafeUrl(allowPrivate:false)
       <p><code>filesEnabled</code> / <code>networkEnabled</code> 存于 <code>workspaces.settings_json</code>，默认开启。关闭后：运行时不再注册对应工具；文件路由返回 403。审计事件为 <code>file.upload</code> / <code>file.delete</code>，web 抓取计入每次 run 的 <code>toolEvents</code>（含 URL、状态、字节数）。</p>
 
       <h3>测试</h3>
-      <p>新增 18 项测试（文件 API 11 项、领域规则 5 项、SSRF 表格与重定向 2 项），全套 <strong>63/63</strong> 通过；typecheck 与生产构建通过。生产构建下实测：上传 → 列表 → 文本预览 → 下载头 → 磁盘 UUID 落盘 → migration v3；<code>web_fetch</code> 对 example.com 返回 200 并抽取标题，对 127.0.0.1 / 169.254.169.254 / [::1] 全部 <code>PRIVATE_URL</code>。</p>
+      <p>新增 23 项测试（文件 API 11 项、领域规则 5 项、SSRF 表格与重定向 2 项），全套 <strong>70/70</strong> 通过；typecheck 与生产构建通过。生产构建下实测：上传 → 列表 → 文本预览 → 下载头 → 磁盘 UUID 落盘 → migration v3；<code>web_fetch</code> 对 example.com 返回 200 并抽取标题，对 127.0.0.1 / 169.254.169.254 / [::1] 全部 <code>PRIVATE_URL</code>。</p>
     </section>
 
     <section id="trace-thinking">
-      <div class="section-kicker">13 · Trace &amp; thinking</div>
+      <div class="section-kicker">14 · Trace &amp; thinking</div>
       <h2>可观测性：轨迹与推理</h2>
       <p>轨迹是 append-only 的元数据事件流，写入与 SSE 推送同源；推理文本只保留最终结果与耗时，不保存逐 token 流。</p>
 
@@ -407,11 +432,11 @@ ALTER TABLE messages ADD COLUMN reasoning_ms INTEGER;     -- 思考耗时（按�
       <p><code>ReasoningBlock</code> 默认折叠，流式中显示脉冲与「思考中…」，完成后显示持久化的「已思考 Ns」；生成结束后的静默刷新会保留占位消息的 key，避免折叠状态被重置。<code>TraceDrawer</code> 打开时经 REST 拉取，流式中通过 SSE <code>trace</code> 事件按 seq 合并，并提供「仅看错误」与「复制 Markdown」。</p>
 
       <h3>测试</h3>
-      <p>新增 4 项测试：一次真实 run 的轨迹包含 5 类事件、seq 单调、meta 早于 trace、跨租户 404、limit 截断标记、删除会话后 404；每会话 1000 条保留上限与最旧裁剪；v3 数据库升级后补齐列；错误脱敏。全套 <strong>63/63</strong> 通过。UI 侧用无头 Chrome 验证折叠/展开、轨迹抽屉 5 条事件与 0 控制台错误。</p>
+      <p>新增 4 项测试：一次真实 run 的轨迹包含 5 类事件、seq 单调、meta 早于 trace、跨租户 404、limit 截断标记、删除会话后 404；每会话 1000 条保留上限与最旧裁剪；v3 数据库升级后补齐列；错误脱敏。全套 <strong>70/70</strong> 通过。UI 侧用无头 Chrome 验证折叠/展开、轨迹抽屉 5 条事件与 0 控制台错误。</p>
     </section>
 
     <section id="connector">
-      <div class="section-kicker">14 · Connectors</div>
+      <div class="section-kicker">15 · Connectors</div>
       <h2>连接器安全</h2>
       <ul>
         <li><strong>协议：</strong>仅 HTTP/HTTPS；GET 参数拼接 query，POST 发送 JSON；12 秒超时；不跟随重定向。</li>
@@ -423,7 +448,7 @@ ALTER TABLE messages ADD COLUMN reasoning_ms INTEGER;     -- 思考耗时（按�
     </section>
 
     <section id="api">
-      <div class="section-kicker">15 · API</div>
+      <div class="section-kicker">16 · API</div>
       <h2>API 参考（摘要）</h2>
       <table>
         <thead><tr><th>方法 / 路径</th><th>权限</th><th>说明</th></tr></thead>
@@ -441,6 +466,11 @@ ALTER TABLE messages ADD COLUMN reasoning_ms INTEGER;     -- 思考耗时（按�
           <tr><td><code>POST /api/w/:ws/assets/:id/publish</code></td><td>作者/管理员</td><td>校验并生成版本快照</td></tr>
           <tr><td><code>GET /api/w/:ws/members</code></td><td>成员</td><td>成员与邀请列表</td></tr>
           <tr><td><code>GET /api/admin/stats</code></td><td>平台管理员</td><td>全平台统计；不读私有聊天内容</td></tr>
+          <tr><td><code>GET /api/w/:ws/models</code></td><td>成员</td><td>有效模型列表（不返回 Key/baseUrl）</td></tr>
+          <tr><td><code>GET /api/w/:ws/model-settings</code></td><td>管理员</td><td>Provider、模型、默认项与 env fallback 状态</td></tr>
+          <tr><td><code>POST/PATCH/DELETE /api/w/:ws/providers</code></td><td>管理员</td><td>Provider 配置；Key 只写不读</td></tr>
+          <tr><td><code>POST/PATCH/DELETE /api/w/:ws/models</code></td><td>管理员</td><td>模型与默认项；变更时重指默认</td></tr>
+          <tr><td><code>POST /api/w/:ws/providers/:id/test</code></td><td>管理员</td><td>8s 连接测试，不返回上游响应体</td></tr>
           <tr><td><code>POST /api/w/:ws/sandbox/run</code></td><td>成员 + 工作区开关</td><td>手动运行 JS</td></tr>
         </tbody>
       </table>
@@ -448,7 +478,7 @@ ALTER TABLE messages ADD COLUMN reasoning_ms INTEGER;     -- 思考耗时（按�
     </section>
 
     <section id="frontend">
-      <div class="section-kicker">16 · Frontend</div>
+      <div class="section-kicker">17 · Frontend</div>
       <h2>前端与构建</h2>
       <ul>
         <li>React 19 + React Router 7；单页应用；服务端由 Fastify 托管 <code>dist/public</code>。</li>
@@ -461,7 +491,7 @@ ALTER TABLE messages ADD COLUMN reasoning_ms INTEGER;     -- 思考耗时（按�
     </section>
 
     <section id="tests">
-      <div class="section-kicker">17 · Quality</div>
+      <div class="section-kicker">18 · Quality</div>
       <h2>测试策略与结果</h2>
       <table>
         <thead><tr><th>层级</th><th>工具</th><th>覆盖</th></tr></thead>
@@ -486,7 +516,7 @@ $ node scripts/build.mjs
     </section>
 
     <section id="deploy">
-      <div class="section-kicker">18 · Deployment</div>
+      <div class="section-kicker">19 · Deployment</div>
       <h2>Docker 本地与阿里云部署</h2>
       <h3>本地一键启动</h3>
       <pre><code>cp .env.example .env
@@ -520,7 +550,7 @@ curl -f https://your.domain/api/health</code></pre>
     </section>
 
     <section id="ops">
-      <div class="section-kicker">19 · Operations</div>
+      <div class="section-kicker">20 · Operations</div>
       <h2>运维、备份与恢复</h2>
       <h3>备份</h3>
       <pre><code># 立即备份（容器内）
@@ -549,7 +579,7 @@ docker compose up -d --build
     </section>
 
     <section id="scale">
-      <div class="section-kicker">20 · Scale</div>
+      <div class="section-kicker">21 · Scale</div>
       <h2>容量与演进</h2>
       <ul>
         <li><strong>当前容量：</strong>单节点 ≤200 活跃用户；SQLite WAL 单写者；LLM 延迟远大于 DB 写，实际瓶颈在模型与沙箱。</li>
@@ -561,7 +591,7 @@ docker compose up -d --build
     </section>
 
     <section id="reviews">
-      <div class="section-kicker">21 · Review gates</div>
+      <div class="section-kicker">22 · Review gates</div>
       <h2>评审记录</h2>
       <table>
         <thead><tr><th>Gate</th><th>范围</th><th>结论</th><th>处置</th></tr></thead>
@@ -569,16 +599,17 @@ docker compose up -d --build
           <tr><td>G0</td><td>架构、租户、沙箱、范围</td><td>条件通过 / 缩减 v1</td><td>采纳：不可变版本、安装校验、Docker 隔离、迁移、备份、SSE 生命周期等</td></tr>
           <tr><td>G1</td><td>后端安全、市场、运行时</td><td>NO-GO → 修复 → GO</td><td>修复市场凭据泄漏、overview 越权、IP 轮换限流、安装孤儿、stale run、记忆授权、沙箱网络、平台审计与迁移兼容；23 项回归测试（v1.1 前）</td></tr>
           <tr><td>G2</td><td>产品体验 / 桌面 &amp; 移动</td><td>条件通过 → 已修复</td><td>修正 @/slash 误导、示例消息标识、市场安装去向/权限、错误态、移动表格、焦点与对比度</td></tr>
-          <tr><td>G3</td><td>测试 / 构建 / 质量</td><td>条件通过 → 已修复</td><td>干净 npm ci 后 tsc/build/23 测试通过；修复开发沙箱、4xx、seed 幂等、工具输出上限</td></tr>
+          <tr><td>G3</td><td>测试 / 构建 / 质量</td><td>条件通过 → 已修复</td><td>干净 npm ci 后 tsc/build 通过；v2.0 全套 70 项测试通过</td></tr>
           <tr><td>G4</td><td>Docker / 阿里云</td><td>条件通过 → 已修复</td><td>修复恢复 WAL/权限、占位密钥、日志轮转、超时、迁移孤儿、.dockerignore；preflight 自检</td></tr>
-          <tr><td>G5</td><td>最终验收</td><td>条件通过</td><td>无确认的阻断代码缺陷；33/33 测试、类型与构建通过。Docker、Caddy、真实模型与队列隔离需在目标环境冒烟</td></tr>
+          <tr><td>G5</td><td>最终验收</td><td>条件通过</td><td>无确认的阻断代码缺陷；70/70 测试、类型与构建通过。Docker、Caddy、真实模型与队列隔离需在目标环境冒烟</td></tr>
+          <tr><td>G9</td><td>v2.0 UI / Provider</td><td>条件通过 → 已修复</td><td>原生选择器、三段式导航、模型 Provider CRUD、AAD 密钥、SSRF 校验、默认模型一致性、密钥失败关闭与 70 项测试</td></tr>
         </tbody>
       </table>
       <p class="small">G1 的完整发现与修复记录见仓库 <code>docs/REVIEW.md</code>。独立 reviewer 在修复后复查关键路径，避免“自己审自己”。</p>
     </section>
 
     <section id="debt">
-      <div class="section-kicker">22 · Debt</div>
+      <div class="section-kicker">23 · Debt</div>
       <h2>技术债与风险登记</h2>
       <table>
         <thead><tr><th>风险</th><th>影响</th><th>缓解 / 计划</th></tr></thead>
@@ -594,7 +625,7 @@ docker compose up -d --build
         </tbody>
       </table>
       <hr />
-      <p class="small">文档版本 1.0 · 2026-11-25 · 代码仓库：<code>chat_ai/</code> · 产品文档：<a href="./product.html">product.html</a> · 封面与快速开始：<a href="./index.html">index.html</a></p>
+      <p class="small">文档版本 2.0 · 2026-11-26 · 代码仓库：<code>chat_ai/</code> · 产品文档：<a href="./product.html">product.html</a> · 封面与快速开始：<a href="./index.html">index.html</a></p>
     </section>
   </main>
 </div>

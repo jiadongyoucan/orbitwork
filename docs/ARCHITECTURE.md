@@ -1,6 +1,6 @@
 # OrbitWork — Architecture & Engineering Notes
 
-> Version 1.0 · 2026-11-25 · Single-node, Docker-first deployment.
+> Version 2.0 · 2026-11-26 · Single-node, Docker-first deployment.
 > This document is the source of truth for the implementation in this repository. The customer-facing HTML version lives at `docs/architecture.html`.
 
 ## 1. Product scope (shipped v1)
@@ -239,7 +239,7 @@ Residual risks for v1:
 - Manual UI checks via headless Chrome/DevTools at 1440px and 390px (screenshots in `docs/assets`).
 - Build verification: `npx tsc --noEmit`, `node scripts/build.mjs`, `NODE_ENV=test npm test`.
 
-Current result: **63/63 tests pass**, typecheck clean, production bundle builds in <300ms.
+Current result: **70/70 tests pass**, typecheck clean, production bundle builds in <300ms.
 
 ## 12. Deployment & operations
 
@@ -272,5 +272,6 @@ Internet :80/:443
 | G3 | Test/quality/build review | Conditional go; clean-install verified |
 | G4 | Docker / Aliyun deployment review | Conditional go; static findings fixed; target verification required |
 | G5 | Final acceptance | Conditional go; no blocking code defect; target smoke required |
+| G9 | v2.0 UI reset + model providers | Implementation review conditional go; HIGH findings fixed | 70/70 tests; native pickers, grouped IA, provider CRUD, AAD keys, SSRF-per-request |
 
 Reviewer artifacts and dispositions are recorded in `docs/REVIEW.md`.

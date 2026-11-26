@@ -55,3 +55,25 @@ export function slugify(input: string): string {
     .slice(0, 48);
   return ascii || `item-${randomBytes(4).toString('hex')}`;
 }
+
+export function encryptSecretWithAad(value: string, aad: string, secret = config.appSecret): string {
+  if (!value) return '';
+  const key = createHash('sha256').update(secret).digest();
+  const iv = randomBytes(12);
+  const cipher = createCipheriv('aes-256-gcm', key, iv);
+  cipher.setAAD(Buffer.from(aad, 'utf8'));
+  const encrypted = Buffer.concat([cipher.update(value, 'utf8'), cipher.final()]);
+  const tag = cipher.getAuthTag();
+  return `v2.${aad.length}.${iv.toString('base64url')}.${tag.toString('base64url')}.${encrypted.toString('base64url')}`;
+}
+
+export function decryptSecretWithAad(payload: string, aad: string, secret = config.appSecret): string {
+  if (!payload) return '';
+  const [version, , iv, tag, data] = payload.split('.');
+  if (version !== 'v2' || !iv || !tag || !data) throw new Error('Invalid provider secret payload');
+  const key = createHash('sha256').update(secret).digest();
+  const decipher = createDecipheriv('aes-256-gcm', key, Buffer.from(iv, 'base64url'));
+  decipher.setAAD(Buffer.from(aad, 'utf8'));
+  decipher.setAuthTag(Buffer.from(tag, 'base64url'));
+  return Buffer.concat([decipher.update(Buffer.from(data, 'base64url')), decipher.final()]).toString('utf8');
+}

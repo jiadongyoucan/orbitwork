@@ -56,7 +56,7 @@ export default function AgentsPage() {
         api.get<{ agents: Agent[] }>(`/api/w/${workspace.id}/agents`),
         api.get<{ assets: Asset[] }>(`/api/w/${workspace.id}/assets?kind=skill`),
         api.get<{ assets: Asset[] }>(`/api/w/${workspace.id}/assets?kind=connector`),
-        api.get<{ models: ModelOption[] }>('/api/models'),
+        api.get<{ models: ModelOption[] }>(`/api/w/${workspace.id}/models`),
       ]);
       setAgents(agentData.agents);
       setSkills(skillData.assets);

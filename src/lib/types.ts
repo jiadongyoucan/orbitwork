@@ -161,7 +161,18 @@ export type Invite = {
   created_at: number;
 };
 
-export type ModelOption = { id: string; label: string };
+export type ModelOption = {
+  id: string;
+  label: string;
+  providerId?: string | null;
+  providerName?: string;
+  contextWindow?: number;
+  source?: 'workspace' | 'system';
+  isDefault?: boolean;
+  hasKey?: boolean;
+  keyError?: boolean;
+  demo?: boolean;
+};
 
 export type Overview = {
   workspace: Workspace;
@@ -192,6 +203,41 @@ export type AuditLog = {
   actor_name?: string;
   actor_email?: string;
   workspace_name?: string;
+};
+
+export type ProviderConfig = {
+  id: string;
+  name: string;
+  type: string;
+  baseUrl: string;
+  enabled: boolean;
+  hasKey: boolean;
+  keyError: boolean;
+  modelCount: number;
+  createdAt: number;
+  updatedAt: number;
+};
+
+export type WorkspaceModel = {
+  id: string;
+  providerId: string;
+  providerName: string;
+  modelId: string;
+  label: string;
+  contextWindow: number;
+  enabled: boolean;
+  isDefault: boolean;
+  createdAt: number;
+  updatedAt: number;
+};
+
+export type ModelSettings = {
+  providers: ProviderConfig[];
+  models: WorkspaceModel[];
+  effectiveModels: ModelOption[];
+  configured: boolean;
+  defaultModel: string;
+  env: { hasKey: boolean; baseUrl: string; modelCount: number };
 };
 
 export type WorkspaceFile = {

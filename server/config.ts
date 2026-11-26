@@ -47,6 +47,7 @@ export const config = {
     queueDir: process.env.SANDBOX_QUEUE_DIR ?? '',
   },
   allowPrivateConnectors: bool(process.env.ALLOW_PRIVATE_CONNECTORS, false),
+  allowPrivateProviders: bool(process.env.ALLOW_PRIVATE_PROVIDERS, false),
   files: {
     dir: process.env.FILES_DIR ?? `${DATA_DIR}/files`,
     maxFileBytes: Number(process.env.FILES_MAX_FILE_BYTES ?? 5 * 1024 * 1024),

@@ -1,4 +1,5 @@
 import { config, isDemoLlm } from '../config.js';
+import { assertSafeUrl } from './connectors.js';
 
 export type ChatMessage = {
   role: 'system' | 'user' | 'assistant' | 'tool';
@@ -34,6 +35,9 @@ export type StreamOptions = {
   signal?: AbortSignal;
   onDelta?: (text: string) => void;
   onReasoning?: (text: string) => void;
+  /** Explicit workspace provider configuration; omitted for env fallback. */
+  provider?: LlmAdapterConfig;
+  demo?: boolean;
 };
 
 export type LlmPort = { stream(options: StreamOptions): Promise<ModelResult> };
@@ -112,7 +116,10 @@ export function createOpenAiAdapter(cfg: LlmAdapterConfig, sleep: (ms: number) =
         let response: Response | null = null;
         for (let attempt = 0; attempt <= cfg.maxRetries; attempt += 1) {
           try {
-            const current = await fetch(`${cfg.baseUrl}/chat/completions`, {
+            const endpointBase = options.provider
+              ? (await assertSafeUrl(cfg.baseUrl, { allowPrivate: config.allowPrivateProviders })).toString().replace(/\/$/, '')
+              : cfg.baseUrl;
+            const current = await fetch(`${endpointBase}/chat/completions`, {
               method: 'POST',
               headers: { 'content-type': 'application/json', authorization: `Bearer ${cfg.apiKey}` },
               body: JSON.stringify({
@@ -129,6 +136,7 @@ export function createOpenAiAdapter(cfg: LlmAdapterConfig, sleep: (ms: number) =
                 stream_options: { include_usage: true },
               }),
               signal: controller.signal,
+              redirect: 'error',
             });
 
             const retryable = current.status === 429 || current.status >= 500;
@@ -306,7 +314,7 @@ function demoAnswer(userText: string): string {
     '在演示模式下，你仍然可以完整体验：工作区隔离、智能体配置、记忆、沙箱、连接器、插件发布与安装、成员权限和审计日志。',
     '',
     '### 建议的下一步',
-    '1. 在「设置 → 模型」确认可用模型。',
+    '1. 在「设置 → 模型与 Provider」配置模型。',
     '2. 创建自己的智能体，绑定技能与连接器。',
     '3. 到插件市场安装一个专家或插件，立即发起会话。',
   ].join('\n');
@@ -325,7 +333,7 @@ export function adapterConfig(): LlmAdapterConfig {
 }
 
 export async function streamModel(options: StreamOptions): Promise<ModelResult> {
-  if (isDemoLlm()) {
+  if (options.demo ?? isDemoLlm()) {
     const lastUser = [...options.messages].reverse().find((message) => message.role === 'user')?.content ?? '';
     const answer = demoAnswer(lastUser);
     for (const chunk of answer.match(/.{1,12}/gs) ?? []) {
@@ -340,6 +348,6 @@ export async function streamModel(options: StreamOptions): Promise<ModelResult> 
       usage: { input: Math.ceil(lastUser.length / 4), output: Math.ceil(answer.length / 4), cachedInput: 0 },
     };
   }
-  // Built per call so tests and a future runtime config switch see fresh values.
-  return createOpenAiAdapter(adapterConfig()).stream(options);
+  // Built per call so tests and workspace provider settings see fresh values.
+  return createOpenAiAdapter(options.provider ?? adapterConfig()).stream(options);
 }

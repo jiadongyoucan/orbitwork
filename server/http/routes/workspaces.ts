@@ -7,7 +7,8 @@ import { assertRole, conflict, forbidden, notFound } from '../../domain/errors.j
 import { hashPassword, randomToken, sha256 } from '../../domain/security.js';
 import { removeWorkspaceFiles } from '../../infrastructure/files.js';
 import { inviteInputSchema, memberRoleSchema, settingsSchema, workspaceInputSchema } from '../../domain/schemas.js';
-import { defaultModel, models } from '../../config.js';
+import { defaultModel } from '../../config.js';
+import { listEffectiveModels, workspaceDefaultModel } from '../../application/model-registry.js';
 
 type Role = 'owner' | 'admin' | 'member';
 
@@ -67,21 +68,27 @@ export async function workspaceRoutes(app: FastifyInstance, db: DB) {
       },
       usage,
       recentChats,
-      models: models(),
+      models: listEffectiveModels(db, ws),
     };
   });
 
   app.get('/api/w/:workspaceId/settings', async (request) => {
     const ctx = requireWorkspace(request, db);
-    return { settings: { ...ctx.workspace.settings, defaultModel: ctx.workspace.settings.defaultModel || defaultModel() }, role: ctx.role };
+    return { settings: { ...ctx.workspace.settings, defaultModel: workspaceDefaultModel(db, ctx.workspace.id, String(ctx.workspace.settings.defaultModel ?? '')) }, role: ctx.role };
   });
 
   app.patch('/api/w/:workspaceId/settings', async (request) => {
     const ctx = requireWorkspace(request, db, 'admin');
     const input = settingsSchema.parse(request.body ?? {});
-    if (input.defaultModel && !models().some((m) => m.id === input.defaultModel)) throw conflict('模型不在允许列表内');
+    if (input.defaultModel && !listEffectiveModels(db, ctx.workspace.id).some((m) => m.id === input.defaultModel)) throw conflict('模型不在允许列表内');
     const settings = { ...ctx.workspace.settings, ...input };
-    db.prepare('UPDATE workspaces SET settings_json = ?, updated_at = ? WHERE id = ?').run(JSON.stringify(settings), now(), ctx.workspace.id);
+    tx(db, () => {
+      if (input.defaultModel) {
+        db.prepare('UPDATE workspace_models SET is_default = 0 WHERE workspace_id = ?').run(ctx.workspace.id);
+        db.prepare('UPDATE workspace_models SET is_default = 1 WHERE workspace_id = ? AND model_id = ?').run(ctx.workspace.id, input.defaultModel);
+      }
+      db.prepare('UPDATE workspaces SET settings_json = ?, updated_at = ? WHERE id = ?').run(JSON.stringify(settings), now(), ctx.workspace.id);
+    });
     audit(db, ctx.workspace.id, ctx.user.id, 'workspace.settings.update', 'workspace', ctx.workspace.id, input, request.ip);
     return { settings };
   });

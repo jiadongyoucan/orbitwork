@@ -141,3 +141,21 @@ Independent QA at 8286260: typecheck clean, 45/45 tests, production build 1.4s, 
 | Acceptance | QA acceptance | PASS (no blockers) | 63/63 tests, typecheck, build 975ms, zip clean of secrets, tag==HEAD, preflight warnings only. Residual: some B/C/D sub-assertions verified at suite level rather than re-read line by line. |
 
 Target verification: 58/58 tests, typecheck clean, production build; live API shows metrics (total/model/tool/first-token) and budget fields; `/trace/export?format=md` returns an attachment; UI drawer renders the four-metric grid and export buttons with 0 console errors.
+
+
+## G9 — v2.0 UI reset + workspace providers (2026-11-26)
+
+**Design review:** CONDITIONAL. Required: one model resolver that never silently falls from configured workspace models to env keys; encrypted write-only provider keys with AAD; SSRF + redirect protection; default pointer consistency; resolved demo state; accessible native pickers and a member guard. All incorporated or intentionally scoped before implementation.
+
+**Implementation review:** CONDITIONAL; four HIGH findings fixed.
+
+### Implementation findings and fixes
+
+| Finding | Fix |
+|---|---|
+| First model could be created disabled and become default; disabling the last enabled model/provider stranded chats with the env fallback suppressed | First model must be enabled; default requires enabled; disabling/deleting the last enabled model or the provider that owns it returns 409 with a clear recovery message; deleting the last remaining model is allowed and reverts to platform default |
+| Settings default model and `workspace_models.is_default` had two sources of truth | PATCH settings now clears/sets the partial-unique default inside the same transaction; `workspaceDefaultModel` prefers the persisted setting when valid |
+| Undecryptable provider key silently produced demo answers while UI said key saved | Provider/model responses expose `keyError`; runtime fails closed with an actionable error; provider card shows “密钥异常” |
+| Provider connection test was not audited | `provider.test` audit records ok/status only, never key or upstream body |
+
+**Verification:** 70/70 tests, typecheck clean, production build; desktop and 390px screenshots for home, capability library, model configuration.

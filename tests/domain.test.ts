@@ -70,7 +70,7 @@ test('file database migrates to the latest version and supports consistent backu
     const path = join(dir, 'test.db');
     const db = openDb(path);
     const version = db.prepare('PRAGMA user_version').get() as { user_version: number };
-    assert.equal(version.user_version, 4);
+    assert.equal(version.user_version, 5);
     db.prepare("INSERT INTO users (id,email,name,password_hash,created_at) VALUES ('u1','a@b.test','A','x',1)").run();
     const backup = join(dir, 'backup.db');
     db.exec(`VACUUM INTO '${backup}'`);
@@ -109,7 +109,7 @@ test('legacy v1 orphan installs and plaintext headers are cleaned during upgrade
     legacy.close();
     const db = openDb(path);
     const version = db.prepare('PRAGMA user_version').get() as { user_version: number };
-    assert.equal(version.user_version, 4);
+    assert.equal(version.user_version, 5);
     assert.equal((db.prepare('SELECT COUNT(*) as n FROM asset_installs').get() as { n: number }).n, 0);
     const asset = db.prepare("SELECT payload_json FROM assets WHERE id = 'a1'").get() as { payload_json: string };
     assert.equal(JSON.parse(asset.payload_json).headers, undefined);
@@ -132,7 +132,7 @@ test('redaction removes keys, bearer tokens and URL query strings', () => {
   assert.match(safe, /api\.example\.com\/v1\?…/);
 });
 
-test('a v3 database upgrades to v4 and gains the trace columns', () => {
+test('a v3 database upgrades to the latest schema and gains the trace columns', () => {
   const dir = mkdtempSync(join(tmpdir(), 'orbit-v3-'));
   try {
     const path = join(dir, 'v3.db');
@@ -144,12 +144,14 @@ test('a v3 database upgrades to v4 and gains the trace columns', () => {
     db.close();
 
     db = openDb(path);
-    assert.equal((db.prepare('PRAGMA user_version').get() as { user_version: number }).user_version, 4);
+    assert.equal((db.prepare('PRAGMA user_version').get() as { user_version: number }).user_version, 5);
     const columns = (db.prepare('PRAGMA table_info(messages)').all() as Array<{ name: string }>).map((column) => column.name);
     assert.ok(columns.includes('run_id'), 'run_id added');
     assert.ok(columns.includes('reasoning_ms'), 'reasoning_ms added');
     const trace = db.prepare("SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'trace_events'").get();
     assert.ok(trace, 'trace_events created');
+    const providers = db.prepare("SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'providers'").get();
+    assert.ok(providers, 'providers created');
     db.close();
   } finally {
     rmSync(dir, { recursive: true, force: true });

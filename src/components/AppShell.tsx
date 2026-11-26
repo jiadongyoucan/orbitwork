@@ -1,9 +1,8 @@
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react';
 import { Link, NavLink, Navigate, useLocation, useNavigate } from 'react-router-dom';
 import {
-  Activity, Boxes, ChevronDown, ChevronLeft, ChevronRight, Clock3, LogOut, Menu, MessageSquarePlus,
-  PanelLeftClose, Plus, Search, Settings, Shield, Sparkles, Store, UserRound, Users, X, Zap, BookOpen,
-  Plug, Bot, BrainCircuit, Code2, LayoutDashboard, FolderOpen,
+  Boxes, ChevronDown, ChevronRight, Clock3, Cpu, FolderOpen, LayoutDashboard, LogOut, Menu,
+  MessageSquarePlus, Plus, Settings, Shield, Store, Users, X, Bot, BrainCircuit, Code2,
 } from 'lucide-react';
 import { api, errorMessage } from '@/lib/api';
 import { useAuth } from '@/context/AuthContext';
@@ -16,16 +15,18 @@ import { cn, initials, relativeTime } from '@/lib/utils';
 const PRIMARY_NAV = [
   { to: '/app', label: '工作台', icon: LayoutDashboard, end: true },
   { to: '/app/agents', label: '智能体', icon: Bot },
-  { to: '/app/experts', label: '专家', icon: Sparkles },
-  { to: '/app/skills', label: '技能', icon: BookOpen },
-  { to: '/app/connectors', label: '连接器', icon: Plug },
+  { to: '/app/experts', label: '能力库', icon: Boxes, match: ['/app/experts', '/app/skills', '/app/connectors'] },
   { to: '/app/market', label: '插件市场', icon: Store },
 ];
 
-const SECONDARY_NAV = [
+const TOOL_NAV = [
   { to: '/app/files', label: '文件', icon: FolderOpen },
   { to: '/app/memories', label: '记忆', icon: BrainCircuit },
-  { to: '/app/sandbox', label: '沙箱', icon: Code2 },
+  { to: '/app/sandbox', label: '代码沙箱', icon: Code2 },
+];
+
+const MANAGE_NAV = [
+  { to: '/app/models', label: '模型与 Provider', icon: Cpu, adminOnly: true },
   { to: '/app/members', label: '成员与权限', icon: Users },
   { to: '/app/settings', label: '工作区设置', icon: Settings },
 ];
@@ -56,7 +57,7 @@ export function AppShell({ children }: { children: ReactNode }) {
     if (!workspace) return;
     try {
       const data = await api.get<{ chats: Chat[] }>(`/api/w/${workspace.id}/chats`);
-      setChats(data.chats.slice(0, 8));
+      setChats(data.chats.slice(0, 5));
     } catch {
       setChats([]);
     }
@@ -126,8 +127,10 @@ export function AppShell({ children }: { children: ReactNode }) {
     return <Navigate to={`/login?next=${encodeURIComponent(location.pathname)}`} replace />;
   }
 
-  const currentLabel = [...PRIMARY_NAV, ...SECONDARY_NAV].find((item) => item.to === location.pathname)?.label
-    ?? (activeChatId ? '对话' : location.pathname === '/app/admin' ? '平台管理' : '工作台');
+  const currentLabel = [...PRIMARY_NAV, ...TOOL_NAV, ...MANAGE_NAV].find((item) => item.to === location.pathname)?.label
+    ?? (['/app/experts', '/app/skills', '/app/connectors'].includes(location.pathname) ? '能力库' : activeChatId ? '对话' : location.pathname === '/app/admin' ? '平台管理' : '工作台');
+  const isAdmin = workspace ? workspace.role === 'owner' || workspace.role === 'admin' : false;
+  const navActive = (to: string, match: string[] = []) => location.pathname === to || match.includes(location.pathname) || (to !== '/app' && location.pathname.startsWith(`${to}/`));
 
   if (!workspace) {
     return (
@@ -187,21 +190,21 @@ export function AppShell({ children }: { children: ReactNode }) {
         </div>
 
         <button className="btn btn-primary" style={{ width: '100%', justifyContent: 'flex-start', paddingLeft: 12 }} onClick={() => void newChat()}>
-          <MessageSquarePlus size={15} />新建任务
+          <MessageSquarePlus size={15} />新建对话
           <span className="kbd" style={{ marginLeft: 'auto', borderColor: 'rgba(0,0,0,.2)', color: 'rgba(0,0,0,.45)', background: 'rgba(0,0,0,.08)' }}>N</span>
         </button>
 
         <div className="sidebar-scroll">
-          <nav className="nav-group" style={{ marginTop: 10 }}>
-            {PRIMARY_NAV.map(({ to, label, icon: NavIcon, end }) => (
-              <NavLink key={to} to={to} end={end} className={({ isActive }) => cn('nav-item', isActive && 'active')}>
+          <div className="nav-label"><span>工作</span></div>
+          <nav className="nav-group">
+            {PRIMARY_NAV.filter((item) => item.to !== '/app/files' || workspace.settings.filesEnabled !== false).map(({ to, label, icon: NavIcon, match }) => (
+              <NavLink key={to} to={to} className={cn('nav-item', navActive(to, match) && 'active')}>
                 <NavIcon size={15} /><span>{label}</span>
-                {label === '插件市场' && <span className="badge badge-accent" style={{ marginLeft: 'auto', height: 18, fontSize: 9 }}>NEW</span>}
               </NavLink>
             ))}
           </nav>
 
-          <div className="nav-label"><span>最近任务</span><Clock3 size={11} /></div>
+          <div className="nav-label"><span>最近对话</span><Clock3 size={11} /></div>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
             {chats.length === 0 && <div style={{ padding: '8px 10px', color: 'var(--faint)', fontSize: 11 }}>还没有任务，开始第一个吧。</div>}
             {chats.map((chat) => (
@@ -212,15 +215,24 @@ export function AppShell({ children }: { children: ReactNode }) {
             ))}
           </div>
 
-          <div className="nav-label"><span>更多</span></div>
+          <div className="nav-label"><span>工具</span></div>
           <nav className="nav-group">
-            {SECONDARY_NAV.filter((item) => item.to !== '/app/files' || workspace?.settings.filesEnabled !== false).map(({ to, label, icon: NavIcon }) => (
-              <NavLink key={to} to={to} className={({ isActive }) => cn('nav-item', isActive && 'active')}>
+            {TOOL_NAV.filter((item) => item.to !== '/app/files' || workspace.settings.filesEnabled !== false).map(({ to, label, icon: NavIcon }) => (
+              <NavLink key={to} to={to} className={cn('nav-item', navActive(to) && 'active')}>
+                <NavIcon size={15} /><span>{label}</span>
+              </NavLink>
+            ))}
+          </nav>
+
+          <div className="nav-label"><span>管理</span></div>
+          <nav className="nav-group">
+            {MANAGE_NAV.filter((item) => !item.adminOnly || isAdmin).map(({ to, label, icon: NavIcon }) => (
+              <NavLink key={to} to={to} className={cn('nav-item', navActive(to) && 'active')}>
                 <NavIcon size={15} /><span>{label}</span>
               </NavLink>
             ))}
             {user.platformRole === 'admin' && (
-              <NavLink to="/app/admin" className={({ isActive }) => cn('nav-item', isActive && 'active')}>
+              <NavLink to="/app/admin" className={cn('nav-item', navActive('/app/admin') && 'active')}>
                 <Shield size={15} /><span>平台管理</span>
               </NavLink>
             )}
@@ -230,6 +242,7 @@ export function AppShell({ children }: { children: ReactNode }) {
         <div className="sidebar-footer" style={{ position: 'relative' }}>
           {userMenu && (
             <div className="card" style={{ position: 'absolute', bottom: 'calc(100% + 6px)', left: 0, right: 0, zIndex: 70, padding: 5, boxShadow: '0 18px 50px rgba(0,0,0,.45)' }}>
+              {isAdmin && <Link to="/app/models" className="nav-item"><Cpu size={14} />模型与 Provider</Link>}
               <Link to="/app/settings" className="nav-item"><Settings size={14} />账号与安全</Link>
               <button className="nav-item" onClick={() => void logout()}><LogOut size={14} />退出登录</button>
             </div>
@@ -255,8 +268,6 @@ export function AppShell({ children }: { children: ReactNode }) {
             <strong>{currentLabel}</strong>
           </div>
           <div style={{ flex: 1 }} />
-          <Link to="/app/market" className="btn btn-ghost btn-sm discover-link" style={{ color: 'var(--muted)' }}><Store size={14} />发现能力</Link>
-          <Link to="/app/memories" className="btn btn-ghost btn-icon" aria-label="记忆"><BrainCircuit size={16} /></Link>
         </div>
         <div className="main-scroll">{children}</div>
       </main>
