@@ -66,7 +66,7 @@ export async function workforceRoutes(app: FastifyInstance, db: DB) {
     if (body.acceptRisk !== undefined && typeof body.acceptRisk !== 'boolean') throw badRequest('acceptRisk 必须为布尔值');
     if (body.overrideReason !== undefined && (typeof body.overrideReason !== 'string' || body.overrideReason.length > 500)) throw badRequest('overrideReason 不合法');
     const goal = acceptWorkforceRun(db, ctx.workspace.id, runId, body.acceptRisk === true, typeof body.overrideReason === 'string' ? body.overrideReason : '');
-    audit(db, ctx.workspace.id, ctx.user.id, 'workforce.run.accept', 'workforce_run', runId, { goalId: goal.id }, request.ip);
+    audit(db, ctx.workspace.id, ctx.user.id, 'workforce.run.accept', 'workforce_run', runId, { goalId: goal.id, acceptedRisk: body.acceptRisk === true, overrideReason: typeof body.overrideReason === 'string' ? body.overrideReason.trim().slice(0, 300) : '' }, request.ip);
     return { goal };
   });
 

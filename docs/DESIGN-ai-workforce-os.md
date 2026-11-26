@@ -2,7 +2,7 @@
 
 ## Product thesis
 
-> Users state an outcome, not a task list. AI Manager creates a reviewable SOP, organizes AI employees, executes against evidence, and an independent verifier checks the result before a human accepts it.
+> Users state an outcome, not a task list. AI Manager creates a reviewable SOP, organizes AI employees, executes against evidence, and an an automatic verifier (MVP simulates independence) checks the result before a human accepts it.
 
 This module implements the first vertical slice from `AI_Workforce_OS.html`: **software release readiness review**. It is deliberately narrower than the full vision: no Enterprise Work Graph, no arbitrary Runtime, no autonomous production changes, no SOP marketplace.
 
@@ -10,7 +10,7 @@ This module implements the first vertical slice from `AI_Workforce_OS.html`: **s
 
 ```
 Goal → AI Manager plan (SOP) → human approves → 7 role-assigned tasks
-     → evidence pack → independent verification → human accepts
+     → evidence pack → automatic verification (MVP simulated independence) → human accepts
 ```
 
 State machine:
@@ -28,10 +28,10 @@ Approval and acceptance are explicit human gates. Run completion is not outcome 
 | Goal intake | Natural language objective, version/platform extraction, assumptions |
 | AI Manager | Deterministic Release Readiness SOP builder + DAG validator |
 | SOP review | Plan task list, roles, dependencies, output contracts, success criteria |
-| AI Workforce | 7 code-defined employee roles (Release Coordinator, Requirement/Build/Quality Analysts, Evaluator, Report Writer, Independent Verifier) |
+| AI Workforce | 7 code-defined employee roles (Release Coordinator, Requirement/Build/Quality Analysts, Evaluator, Report Writer, Verification Agent) |
 | Execution | Sequential dependency-ordered local evidence engine |
 | Evidence Store | Per-task evidence rows with source and payload |
-| Verifier | Four checks: task completion, evidence coverage, report, independent verification |
+| Verifier | Four checks: task completion, evidence coverage, report, automatic verification (MVP) |
 | Human acceptance | Only `review` runs can be accepted |
 | Work dashboard | Goals, status, progress, roster, accepted rate |
 
@@ -60,7 +60,7 @@ Approval and acceptance are explicit human gates. Run completion is not outcome 
 
 All queries are scoped by `workspace_id`; every mutation is audited. Any workspace member can create and read goals. Approval/execution require the goal creator or a workspace admin; acceptance requires a workspace admin. The verifier fails closed on a blocking risk; admins must explicitly accept risk. The synthetic snapshot flag is persisted and surfaced in the UI.
 
-## Data model (migration v7)
+## Data model (migration v8)
 
 - `workforce_goals`: id, workspace, user, objective, status, plan_json, context_json
 - `workforce_runs`: id, workspace, goal (unique), user, status, snapshot_json, verification_json, report_md, synthetic, timestamps
@@ -71,7 +71,7 @@ All queries are scoped by `workspace_id`; every mutation is audited. Any workspa
 
 - Pure domain: goal parsing, plan DAG validation, deterministic task outputs, verifier pass/conditional.
 - API integration: goal → approve → execute → review → accept, overview stats, validation, cross-workspace 404.
-- Full suite: 76 tests (plus typecheck/build).
+- Full suite: 77 tests (plus typecheck/build).
 
 ## Roadmap after MVP
 

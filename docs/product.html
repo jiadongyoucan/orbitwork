@@ -72,7 +72,7 @@
         <div class="card"><div class="kicker">Capability</div><h3>能力可组装</h3><p class="small">角色指令 × 技能 × 连接器 × 记忆 × 沙箱，组合成专属智能体。</p></div>
         <div class="card"><div class="kicker">Network</div><h3>市场可流通</h3><p class="small">专家/技能/连接器可发布，插件可一键安装；版本快照不可变。</p></div>
       </div>
-      <div class="callout"><strong>当前交付状态：</strong>产品、架构、前后端、数据库迁移、测试、Docker 配置与产品/架构文档均已落在本仓库；76 项自动化测试通过，TypeScript 类型检查通过。生产运行前只需替换环境变量中的密钥与管理员密码。</div>
+      <div class="callout"><strong>当前交付状态：</strong>产品、架构、前后端、数据库迁移、测试、Docker 配置与产品/架构文档均已落在本仓库；77 项自动化测试通过，TypeScript 类型检查通过。生产运行前只需替换环境变量中的密钥与管理员密码。</div>
     </section>
 
     <section id="benchmark">
@@ -220,11 +220,11 @@
       <div class="grid-3">
         <div class="card"><h3>Goal → SOP</h3><p class="small">自然语言目标被解析为包含任务、角色、依赖、输出契约和成功标准的可审阅计划。</p></div>
         <div class="card"><h3>Workforce → Run</h3><p class="small">按依赖顺序执行 7 个任务；每个任务有负责人、输出和证据，运行完成不等于结果被接受。</p></div>
-        <div class="card"><h3>Verify → Accept</h3><p class="small">独立验证员检查任务、证据和报告；只有通过验证的 review 状态才能由发起人或管理员验收。</p></div>
+        <div class="card"><h3>Verify → Accept</h3><p class="small">验证员执行自动校验（MVP 为模拟独立验证）；只有通过校验的 review 状态才能由管理员验收。</p></div>
       </div>
-      <figure class="shot"><img src="./assets/workforce-detail.png" alt="AI Workforce 执行详情" /><figcaption>执行详情：SOP 进度、管理评审报告、独立验证、风险清单与验收状态。</figcaption></figure>
+      <figure class="shot"><img src="./assets/workforce-detail.png" alt="AI Workforce 执行详情" /><figcaption>执行详情：SOP 进度、评审报告、自动校验、风险清单与管理员验收状态。</figcaption></figure>
       <div class="callout warn"><strong>MVP 边界：</strong>当前发布快照是本地确定性证据包，用于验证 Goal → SOP → Workforce → Execute → Verify → Deliver 闭环；并非真实 Jira / Git / Jenkins / DPLM 数据。接入企业连接器、动态 SOP 与完整 Work Graph 属于下一阶段。平台不自动执行生产环境变更。</div>
-      <p class="small">状态机：<code>planned → approved → running → review → accepted</code>，执行失败进入 <code>failed</code>。数据表：<code>workforce_goals</code>、<code>workforce_runs</code>、<code>workforce_tasks</code>、<code>workforce_evidence</code>（migration v7）。API：<code>/api/w/:ws/workforce/*</code>。</p>
+      <p class="small">状态机：<code>planned → approved → running → review → accepted</code>，执行失败进入 <code>failed</code>。数据表：<code>workforce_goals</code>、<code>workforce_runs</code>、<code>workforce_tasks</code>、<code>workforce_evidence</code>（migration v8）。API：<code>/api/w/:ws/workforce/*</code>。</p>
     </section>
 
     <section id="memory">
@@ -400,11 +400,11 @@ suspended                      回到 draft（私有，需重新发布）</div>
         <li><span class="tick">✓</span><div><strong>沙箱：</strong>本地 HTTP worker 与生产文件队列；权限与超时验证；工作区开关。</div></li>
         <li><span class="tick">✓</span><div><strong>市场：</strong>发布、安装、收藏、插件打包、版本快照、密钥不泄漏、下架/恢复、安装计数回退。</div></li>
         <li><span class="tick">✓</span><div><strong>权限隔离：</strong>工作区 404、会话私有、成员记忆授权、平台管理员边界、Origin/JSON/速率限制。</div></li>
-        <li><span class="tick">✓</span><div><strong>工程：</strong>迁移 runner、WAL 备份、类型检查、76 项测试、生产构建 < 300ms。</div></li>
+        <li><span class="tick">✓</span><div><strong>工程：</strong>迁移 runner、WAL 备份、类型检查、77 项测试、生产构建 < 300ms。</div></li>
         <li><span class="tick">✓</span><div><strong>部署：</strong>Dockerfile、Compose、Caddy TLS/SSE、沙箱网络隔离、环境变量样例、健康检查。</div></li>
         <li><span class="tick todo">◷</span><div><strong>后续：</strong>真实模型联调（需提供 API Key）、Docker 本机实机启动（当前构建环境无容器守护进程）、生产 TLS 域名验证。</div></li>
       </ul>
-      <div class="callout warn"><strong>测试数字：</strong>本仓库当前为 <strong>76/76</strong> 自动化测试通过（见 <code>npm test</code>）；产品的最终验收仍需要在目标环境配置真实 LLM Key，并执行一次 Docker Compose 启动与浏览器端到端冒烟。</div>
+      <div class="callout warn"><strong>测试数字：</strong>本仓库当前为 <strong>77/77</strong> 自动化测试通过（见 <code>npm test</code>）；产品的最终验收仍需要在目标环境配置真实 LLM Key，并执行一次 Docker Compose 启动与浏览器端到端冒烟。</div>
     </section>
 
     <section id="limits">

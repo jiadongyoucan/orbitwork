@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import type { FastifyInstance } from 'fastify';
 import { createApp } from '../server/app.js';
 import { resetRates } from '../server/http/rate-limit.js';
+import { reconcileWorkforceRuns } from '../server/application/workforce-service.js';
 import { buildReleasePlan, buildReleaseSnapshot, executeTask, understandGoal, validatePlan, verifyTasks } from '../server/domain/workforce.js';
 
 let app: FastifyInstance;
@@ -123,4 +124,58 @@ test('workforce API: members can read workspace goals but only owner/admin can m
   assert.equal(read.statusCode, 200);
   const forbidden = await call('POST', `/api/w/${owner.workspaceId}/workforce/goals/${goalId}/approve`, member.cookie);
   assert.equal(forbidden.statusCode, 403);
+  const approve = await call('POST', `/api/w/${owner.workspaceId}/workforce/goals/${goalId}/approve`, owner.cookie);
+  const runId = approve.json().goal.run.id;
+  await call('POST', `/api/w/${owner.workspaceId}/workforce/runs/${runId}/execute`, owner.cookie);
+  const memberAccept = await call('POST', `/api/w/${owner.workspaceId}/workforce/runs/${runId}/accept`, member.cookie);
+  assert.equal(memberAccept.statusCode, 403);
+});
+
+
+test('workforce API: state guards, duplicate operations, reconciliation and cross-tenant mutations', async () => {
+  const owner = await signup();
+  const other = await signup();
+  const created = await call('POST', `/api/w/${owner.workspaceId}/workforce/goals`, owner.cookie, { objective: '分析 V4.0 发布风险并输出管理评审报告' });
+  const goalId = created.json().goal.id;
+  const firstApprove = await call('POST', `/api/w/${owner.workspaceId}/workforce/goals/${goalId}/approve`, owner.cookie);
+  const runId = firstApprove.json().goal.run.id;
+  const secondApprove = await call('POST', `/api/w/${owner.workspaceId}/workforce/goals/${goalId}/approve`, owner.cookie);
+  assert.equal(secondApprove.statusCode, 200);
+  assert.equal(secondApprove.json().goal.run.id, runId);
+
+  (app as any).db.prepare("UPDATE workforce_runs SET status = 'running' WHERE id = ?").run(runId);
+  const running = await call('POST', `/api/w/${owner.workspaceId}/workforce/runs/${runId}/execute`, owner.cookie);
+  assert.equal(running.statusCode, 409);
+  (app as any).db.prepare("UPDATE workforce_runs SET status = 'approved' WHERE id = ?").run(runId);
+  const executed = await call('POST', `/api/w/${owner.workspaceId}/workforce/runs/${runId}/execute`, owner.cookie);
+  assert.equal(executed.statusCode, 200);
+  const repeatExecute = await call('POST', `/api/w/${owner.workspaceId}/workforce/runs/${runId}/execute`, owner.cookie);
+  assert.equal(repeatExecute.statusCode, 200);
+  assert.equal(repeatExecute.json().goal.run.id, runId);
+
+  const noRiskAccept = await call('POST', `/api/w/${owner.workspaceId}/workforce/runs/${runId}/accept`, owner.cookie);
+  assert.equal(noRiskAccept.statusCode, 409);
+  const accepted = await call('POST', `/api/w/${owner.workspaceId}/workforce/runs/${runId}/accept`, owner.cookie, { acceptRisk: true, overrideReason: '业务负责人确认发布窗口，保留回滚方案' });
+  assert.equal(accepted.statusCode, 200);
+  const repeatAccept = await call('POST', `/api/w/${owner.workspaceId}/workforce/runs/${runId}/accept`, owner.cookie);
+  assert.equal(repeatAccept.statusCode, 200);
+
+  const crossApprove = await call('POST', `/api/w/${other.workspaceId}/workforce/goals/${goalId}/approve`, other.cookie);
+  assert.equal(crossApprove.statusCode, 404);
+  const crossExecute = await call('POST', `/api/w/${other.workspaceId}/workforce/runs/${runId}/execute`, other.cookie);
+  assert.equal(crossExecute.statusCode, 404);
+  const crossAccept = await call('POST', `/api/w/${other.workspaceId}/workforce/runs/${runId}/accept`, other.cookie);
+  assert.equal(crossAccept.statusCode, 404);
+
+  const second = await call('POST', `/api/w/${owner.workspaceId}/workforce/goals`, owner.cookie, { objective: '分析 V4.1 发布风险并输出管理评审报告' });
+  const secondGoal = second.json().goal.id;
+  const approved = await call('POST', `/api/w/${owner.workspaceId}/workforce/goals/${secondGoal}/approve`, owner.cookie);
+  const secondRun = approved.json().goal.run.id;
+  (app as any).db.prepare("UPDATE workforce_runs SET status = 'running' WHERE id = ?").run(secondRun);
+  reconcileWorkforceRuns((app as any).db);
+  const reconciled = await call('GET', `/api/w/${owner.workspaceId}/workforce/goals/${secondGoal}`, owner.cookie);
+  assert.equal(reconciled.json().goal.run.status, 'failed');
+  const retry = await call('POST', `/api/w/${owner.workspaceId}/workforce/runs/${secondRun}/execute`, owner.cookie);
+  assert.equal(retry.statusCode, 200);
+  assert.equal(retry.json().goal.run.status, 'review');
 });

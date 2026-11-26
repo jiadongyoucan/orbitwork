@@ -239,7 +239,7 @@ Residual risks for v1:
 - Manual UI checks via headless Chrome/DevTools at 1440px and 390px (screenshots in `docs/assets`).
 - Build verification: `npx tsc --noEmit`, `node scripts/build.mjs`, `NODE_ENV=test npm test`.
 
-Current result: **76/76 tests pass**, typecheck clean, production bundle builds in <300ms.
+Current result: **77/77 tests pass**, typecheck clean, production bundle builds in <300ms.
 
 ## 12. Deployment & operations
 
@@ -276,6 +276,6 @@ Internet :80/:443
 | G10 | v2.1 workbench cleanup + chat management | GO | Single Workbench entry, sidebar no recents, all-chat/archive management, 71/71 tests |
 | G11 | v2.2 account & security hub | GO | Sidebar management entries removed; members moved into settings tabs; 71/71 tests |
 | G12 | v2.3 marketing landing / CTA | GO | Logged-out login + start; logged-in start only; first-time signup guidance |
-| G13 | v2.4 AI Workforce OS MVP | Conditional GO | Goal→SOP→run→evidence→verify→accept; synthetic flag; blocking risks require explicit admin risk acceptance; 76/76 tests |
+| G13 | v2.4 AI Workforce OS MVP | Conditional GO | Goal→SOP→run→evidence→verify→accept; synthetic flag; blocking risks require explicit admin risk acceptance; 77/77 tests |
 
 Reviewer artifacts and dispositions are recorded in `docs/REVIEW.md`.

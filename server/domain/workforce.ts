@@ -23,7 +23,7 @@ export const WORKFORCE_ROLES: WorkforceRole[] = [
   { id: 'quality-analyst', name: 'Quality Analyst', title: '质量分析师', responsibility: '分析测试覆盖、缺陷与回归风险', skills: ['quality', 'defects'] },
   { id: 'quality-evaluator', name: 'Quality Evaluator', title: '质量评估员', responsibility: '按业务规则生成可追溯的风险判断', skills: ['risk', 'evaluation'] },
   { id: 'report-writer', name: 'Report Writer', title: '报告撰写员', responsibility: '把证据与判断整理为评审材料', skills: ['writing', 'reporting'] },
-  { id: 'independent-verifier', name: 'Independent Verifier', title: '独立验证员', responsibility: '检查证据、结论与验收标准', skills: ['verification', 'evidence'] },
+  { id: 'independent-verifier', name: 'Verification Agent', title: '验证员', responsibility: '检查证据、结论与验收标准', skills: ['verification', 'evidence'] },
 ];
 
 export function roleById(id: string): WorkforceRole {
@@ -97,7 +97,7 @@ export function buildReleasePlan(goal: GoalUnderstanding): WorkPlan {
     scope: goal.scope,
     desiredOutcome: goal.desiredOutcome,
     assumptions: goal.assumptions,
-    successCriteria: ['每个风险有等级、依据和来源', '证据覆盖版本、需求、构建、测试与缺陷', '报告给出明确的发布建议', '独立验证通过后才能人工验收'],
+    successCriteria: ['每个风险有等级、依据和来源', '证据覆盖版本、需求、构建、测试与缺陷', '报告给出明确的发布建议', '自动校验通过后才能人工验收'],
     tasks: [
       task('t1', 1, '建立版本档案', 'release-coordinator', 'profile', [], '版本范围、目标与关键对象', ['release-profile']),
       task('t2', 2, '盘点需求变更', 'requirement-analyst', 'requirements', ['t1'], '变更清单与未闭环项', ['requirement-changes']),
@@ -105,7 +105,7 @@ export function buildReleasePlan(goal: GoalUnderstanding): WorkPlan {
       task('t4', 4, '汇总质量状态', 'quality-analyst', 'quality', ['t2', 't3'], '测试、缺陷与覆盖摘要', ['test-status', 'defect-summary']),
       task('t5', 5, '生成风险判断', 'quality-evaluator', 'risk', ['t4'], '按规则生成的风险清单', ['risk-assessment']),
       task('t6', 6, '撰写评审报告', 'report-writer', 'report', ['t5'], '可评审的管理报告', ['risk-report']),
-      task('t7', 7, '独立验证证据', 'independent-verifier', 'verification', ['t6'], '证据完整性与结论校验', ['verification-result']),
+      task('t7', 7, '自动校验证据', 'independent-verifier', 'verification', ['t6'], '证据完整性与结论校验', ['verification-result']),
     ],
   };
 }
@@ -249,7 +249,7 @@ export function verifyTasks(tasks: Array<{ status: string; evidence: Evidence[];
     { id: 'tasks', label: '全部任务完成', status: tasks.every((task) => task.status === 'done') ? 'pass' : 'warn', detail: `${tasks.filter((task) => task.status === 'done').length}/${tasks.length} 个任务完成` },
     { id: 'evidence', label: '证据覆盖', status: tasks.every((task) => task.evidence.length > 0) ? 'pass' : 'warn', detail: `${tasks.reduce((sum, task) => sum + task.evidence.length, 0)} 条证据` },
     { id: 'report', label: '报告包含发布建议', status: tasks.find((task) => task.kind === 'report')?.evidence.length ? 'pass' : 'warn', detail: '报告与风险判断已生成' },
-    { id: 'independence', label: '独立验证', status: tasks.some((task) => task.kind === 'verification') ? 'pass' : 'warn', detail: '验证员任务已执行' },
+    { id: 'independence', label: '自动校验（模拟独立验证）', status: tasks.some((task) => task.kind === 'verification') ? 'pass' : 'warn', detail: '由同一执行流程自动检查，尚未接入独立 Runtime/模型' },
     { id: 'blockers', label: '阻断风险已关闭', status: riskLevel === '阻断' ? 'warn' : 'pass', detail: riskLevel === '阻断' ? '存在阻断级风险，需人工风险接受' : '未发现阻断级风险' },
   ];
   const passed = checks.filter((check) => check.status === 'pass').length;

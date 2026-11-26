@@ -418,6 +418,11 @@ CREATE INDEX IF NOT EXISTS idx_workforce_evidence_run ON workforce_evidence(run_
       }
     },
   },
+  {
+    version: 8,
+    name: 'workforce evidence idempotency',
+    sql: `CREATE UNIQUE INDEX IF NOT EXISTS idx_workforce_evidence_unique ON workforce_evidence(run_id, task_id, kind);`,
+  },
 ];
 
 function runMigrations(db: DB): void {

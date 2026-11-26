@@ -62,7 +62,7 @@ export default function WorkforcePage() {
       <PageHeader
         eyebrow="AI WORKFORCE OS"
         title="把目标交给一支 AI 团队"
-        subtitle="目标 → 工作计划 → AI 员工 → 证据 → 独立验证 → 人工验收。MVP 使用本地规则证据包，可通过连接器替换为真实企业数据。"
+        subtitle="目标 → 工作计划 → AI 员工 → 证据 → 自动校验（MVP 模拟独立验证）→ 人工验收。MVP 使用本地规则证据包，可通过连接器替换为真实企业数据。"
         actions={<Link to="/app/workforce" className="btn" onClick={(event) => { event.preventDefault(); document.getElementById('wf-goal')?.focus(); }}><Sparkles size={14} />发起工作</Link>}
       />
 
@@ -70,7 +70,7 @@ export default function WorkforcePage() {
         <div className="wf-hero-copy">
           <div className="eyebrow">AI Manager · Goal intake</div>
           <h2>描述结果，而不是分配任务。</h2>
-          <p>AI Manager 会生成可审阅的 SOP，选择合适的 AI 员工，执行后再由独立验证员检查证据。</p>
+          <p>AI Manager 会生成可审阅的 SOP，选择合适的 AI 员工，执行后再由验证器自动检查证据。</p>
         </div>
         <div className="wf-goal-box">
           <textarea

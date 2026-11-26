@@ -174,13 +174,13 @@ export function executeWorkforceRun(db: DB, workspaceId: string, runId: string):
         throw error;
       }
       const finished = now();
-      db.prepare("UPDATE workforce_tasks SET status = 'done', output = ?, finished_at = ? WHERE id = ?").run(result.output, finished, task.id);
       for (const item of result.evidence) {
         db.prepare(
-          `INSERT INTO workforce_evidence (id, run_id, task_id, title, kind, source, payload_json, created_at)
+          `INSERT OR IGNORE INTO workforce_evidence (id, run_id, task_id, title, kind, source, payload_json, created_at)
            VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
         ).run(randomUUID(), run.id, task.id, item.title, item.kind, item.source, JSON.stringify(item.payload), finished);
       }
+      db.prepare("UPDATE workforce_tasks SET status = 'done', output = ?, finished_at = ? WHERE id = ?").run(result.output, finished, task.id);
     }
     const doneTasks = taskViews(db, run.id);
     const verification = verifyTasks(doneTasks.map((task) => ({ status: task.status, evidence: task.evidence, kind: task.kind })));
@@ -205,7 +205,7 @@ export function acceptWorkforceRun(db: DB, workspaceId: string, runId: string, a
   if (run.status === 'accepted') return detail(db, workspaceId, goal.id);
   if (run.status !== 'review') throw conflict('只有待验收的执行可以确认');
   const verification = json<Verification | null>(run.verification_json, null);
-  if (verification?.verdict !== 'pass' && !acceptRisk) throw conflict('独立验证未通过；请处理阻断风险，或由管理员显式接受风险');
+  if (verification?.verdict !== 'pass' && !acceptRisk) throw conflict('自动校验未通过；请处理阻断风险，或由管理员显式接受风险');
   if (verification?.verdict !== 'pass' && !overrideReason.trim()) throw badRequest('接受风险需要填写原因');
   const timestamp = now();
   tx(db, () => {

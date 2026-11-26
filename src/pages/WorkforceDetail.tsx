@@ -170,7 +170,7 @@ export default function WorkforceDetailPage() {
 
           {run?.verification && (
             <section className="card wf-side-card">
-              <div className="wf-side-title"><ShieldCheck size={14} />独立验证 <span className="wf-score">{run.verification.score}</span></div>
+              <div className="wf-side-title"><ShieldCheck size={14} />自动校验（模拟独立验证） <span className="wf-score">{run.verification.score}</span></div>
               {run.verification.checks.map((check) => <div className="wf-check" key={check.id}><span className={check.status === 'pass' ? 'ok' : 'warn'}>{check.status === 'pass' ? <CheckCircle2 size={13} /> : <Clock3 size={13} />}</span><div><b>{check.label}</b><small>{check.detail}</small></div></div>)}
               <div className={cn('wf-verdict', run.verification.verdict === 'pass' ? 'pass' : 'warn')}>{run.verification.verdict === 'pass' ? '证据完整，可进入人工验收' : '存在未通过项，请人工判断'}</div>
             </section>
@@ -196,7 +196,7 @@ export default function WorkforceDetailPage() {
         open={acceptOpen}
         onClose={() => setAcceptOpen(false)}
         title="接受风险并验收"
-        subtitle="独立验证未通过，管理员可以在记录原因后进行风险接受。"
+        subtitle="自动校验未通过，管理员可以在记录原因后进行风险接受。"
         footer={<><button className="btn" onClick={() => setAcceptOpen(false)}>取消</button><button className="btn btn-primary" disabled={!acceptReason.trim() || Boolean(busy)} onClick={() => void act('accept')}>{busy === 'accept' ? <Spinner size={13} /> : <ShieldCheck size={13} />}确认验收</button></>}
       >
         <label className="field"><span className="label">风险接受原因</span><textarea className="input" style={{ minHeight: 88, resize: 'vertical' }} maxLength={500} value={acceptReason} onChange={(event) => setAcceptReason(event.target.value)} placeholder="说明为什么在存在风险的情况下仍可验收，例如：业务负责人确认发布窗口，阻断项已有回滚方案。" /></label>
