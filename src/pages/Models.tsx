@@ -205,7 +205,7 @@ export default function ModelsPage() {
             <div className="model-summary-main">
               <span className={settings.configured ? 'model-summary-icon active' : 'model-summary-icon'}>{settings.configured ? <Cpu size={19} /> : <Zap size={19} />}</span>
               <div>
-                <div className="model-summary-title">{settings.configured ? `${settings.models.filter((model) => model.enabled).length} 个可用模型` : '使用平台默认模型'}</div>
+                <div className="model-summary-title">{settings.configured ? `${settings.effectiveModels.length} 个可用模型` : '使用平台默认模型'}</div>
                 <div className="model-summary-sub">{settings.configured ? `默认：${settings.defaultModel || '未设置'} · 配置已覆盖环境变量` : '当前尚未添加 Provider，应用会读取部署环境变量中的 LLM_* 配置。'}</div>
               </div>
             </div>

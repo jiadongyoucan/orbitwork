@@ -254,6 +254,7 @@ export async function modelRoutes(app: FastifyInstance, db: DB) {
     const ctx = requireWorkspace(request, db, 'admin');
     const input = modelInputSchema.parse(request.body ?? {});
     const provider = providerFor(db, ctx.workspace.id, input.providerId);
+    if (input.enabled && !provider.enabled) throw conflict('Provider 已停用，请先启用 Provider');
     const duplicate = db.prepare('SELECT id FROM workspace_models WHERE workspace_id = ? AND model_id = ?').get(ctx.workspace.id, input.modelId);
     if (duplicate) throw conflict('该模型 ID 已在当前工作区配置');
     if (!input.enabled && totalModels(db, ctx.workspace.id) === 0) throw badRequest('第一个模型必须启用');
@@ -279,7 +280,10 @@ export async function modelRoutes(app: FastifyInstance, db: DB) {
     const { id } = request.params as { id: string };
     const existing = modelFor(db, ctx.workspace.id, id);
     const input = modelPatchSchema.parse(request.body ?? {});
-    if (input.providerId) providerFor(db, ctx.workspace.id, input.providerId);
+    if (input.providerId) {
+      const nextProvider = providerFor(db, ctx.workspace.id, input.providerId);
+      if (input.enabled !== false && !nextProvider.enabled) throw conflict('不能把启用模型移动到停用 Provider');
+    }
     if (input.isDefault && input.enabled === false) throw badRequest('默认模型必须启用');
     if (input.enabled === false && existing.enabled && enabledModelCount(db, ctx.workspace.id) <= 1) {
       throw conflict('至少保留一个启用模型；如要回退平台默认，请删除全部模型');
