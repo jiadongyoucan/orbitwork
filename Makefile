@@ -1,4 +1,4 @@
-.PHONY: up down logs rebuild test typecheck backup preflight
+.PHONY: up down logs rebuild test typecheck backup preflight package
 
 preflight:
 	node scripts/preflight.mjs
@@ -24,3 +24,6 @@ typecheck:
 
 backup:
 	docker compose run --rm app node dist/backup.js
+
+package:
+	bash scripts/package.sh

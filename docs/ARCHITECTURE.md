@@ -63,14 +63,15 @@ server/
   index.ts / seed.ts / seed-cli.ts / backup.ts
   domain/                    errors, RBAC, crypto, schemas (pure rules)
   application/agent-runtime.ts
-  infrastructure/            db + migrations, LLM, connectors, sandbox client
+  infrastructure/            db + migrations, LLM, connectors, sandbox client,
+                             workspace files (files.ts), web fetch (web.ts), trace (trace.ts)
   http/context.ts            session auth, workspace membership, audit helpers
   http/rate-limit.ts         identity-scoped fixed windows
-  http/routes/               auth, workspaces, agents, chats, memories, assets, admin, misc
+  http/routes/               auth, workspaces, agents, chats, memories, files, assets, admin, misc
   sandbox-worker.ts          queue + loopback HTTP dev worker
 src/
   pages/                     Landing, Auth, Home, Chat, Agents, Assets, Market, Memories,
-                             Sandbox, Members, Settings, Admin
+                             Files, Sandbox, Members, Settings, Admin
   components/                AppShell, UI primitives, Markdown, Icon
   context/                   AuthContext, ToastContext
   lib/                       api client, SSE parser, types, utils
@@ -93,6 +94,8 @@ users ──< sessions
         └──< memories     └──< messages          ├──< asset_installs
                           └──< runs             └──< asset_stars
 workspaces ──< audit_logs
+workspaces ──< files (name unique per workspace; blob on disk by UUID)
+chats ──< trace_events (append-only metadata; unique(chat_id, seq))
 users ──< platform_audit_logs
 ```
 
@@ -192,6 +195,28 @@ app ──writes JSON job──► /jobs volume ──► sandbox worker (networ
 - Residual risk: the worker process itself is trusted; it must never be given secrets. The queue volume contains only code and outputs.
 - Development path uses a loopback-only HTTP worker with a shared token. It is not exposed by Compose and **does not provide network isolation**; never use it as the production sandbox.
 
+
+## 9.5 Controlled web access & workspace files (v1.1)
+
+Two capabilities, both implemented in the app process; the sandbox stays `network:none`.
+
+- `web_fetch` tool: `assertSafeUrl(url, { allowPrivate: false })` (the connector env flag cannot unlock it), manual redirects re-validated per hop (max 3), 1 MB response cap, 15 s timeout, HTML→text extraction, 5 fetches per run. Fetched text is labelled untrusted in the tool result and never merged into the system prompt.
+- Workspace files: `files` table (migration v3) + blobs at `<DATA_DIR>/files/<workspaceId>/<fileId>`. Display name is metadata only; the on-disk key is a UUID, so path traversal is structurally impossible. Same-name writes upsert, keeping one row and one blob.
+- API: raw `application/octet-stream` upload with `?name=&mime=` (no multipart dependency), list, text preview, download, delete. Route-level `bodyLimit` and a strict URL match are the only exemptions from the JSON-only request rule.
+- Tools: `list_files`, `read_file` (7.6k chars per call, `offset` to page), `write_file`. Gated by `filesEnabled`; `web_fetch` by `networkEnabled` and `WEB_FETCH_ENABLED`.
+- Quotas: 5 MB/file, 200 MB and 500 files per workspace; quotas checked before writing.
+- Residual risks: DNS rebinding TOCTOU (validation and connect resolve separately) — mitigation requires pinning the IP at connect time; no PDF/Office parsing; no file versioning; only in-process rate limits.
+
+
+## 9.6 Conversation trace & reasoning display (v1.2)
+
+- `trace_events` (migration v4) is an append-only metadata stream: `run.start`, `prompt.ready`, `model.call`, `model.first_token`, `tool.call`, `run.done`, `run.error`, with `seq` per chat and `UNIQUE(chat_id, seq)`.
+- Writes are isolated from streaming: a failed insert logs and continues. Retention is 1000 rows per chat; the API reports `truncated` / `totalEvents`.
+- Nothing sensitive is stored: sizes, tool names, web fetch **host**, durations, status. File names are deliberately excluded; provider errors are redacted (`sk-*`, `Bearer`) and capped at 120 chars.
+- `messages.run_id` links an answer to its run; `messages.reasoning_ms` accumulates thinking time **per model call**, so tool execution never inflates it.
+- Streaming: SSE gains a `trace` event carrying the same row; the drawer merges REST history with live events by `seq`. `meta` still precedes `trace` for the first two events, so the client keys on `seq`, not `runId`.
+- UI: `ReasoningBlock` is collapsed by default, shows a live pulse while thoughts arrive, then the persisted duration; the post-stream silent reload preserves the placeholder message key so an expanded block stays expanded. `TraceDrawer` offers error-only filtering and Markdown export.
+
 ## 10. Security controls & residual risks
 
 Implemented: scrypt, opaque sessions, RBAC + object checks, tenant-scoped SQL, Zod validation, CSP, Origin checks, rate limits, encrypted connector secrets, SSRF guard (private/loopback/link-local/metadata, redirects disabled), AES-GCM, immutable marketplace snapshots, audit logs.
@@ -214,7 +239,7 @@ Residual risks for v1:
 - Manual UI checks via headless Chrome/DevTools at 1440px and 390px (screenshots in `docs/assets`).
 - Build verification: `npx tsc --noEmit`, `node scripts/build.mjs`, `NODE_ENV=test npm test`.
 
-Current result: **23/23 tests pass**, typecheck clean, production bundle builds in <300ms.
+Current result: **63/63 tests pass**, typecheck clean, production bundle builds in <300ms.
 
 ## 12. Deployment & operations
 
@@ -230,7 +255,8 @@ Internet :80/:443
 
 - Local: `docker compose up -d --build`; Caddy on `http://localhost:8080`.
 - Aliyun: single ECS (2 vCPU / 4 GB recommended), Docker Engine + Compose, security group 80/443/22 only.
-- Env contract: `.env.example`; production requires unique `APP_SECRET`, strong seed passwords, `SITE_ADDRESS`, `APP_ORIGIN`, `COOKIE_SECURE=true`, `TRUST_PROXY=loopback,linklocal,uniquelocal` (set by Compose).
+- Env contract: `.env.example`; v1.1 adds `WEB_FETCH_*` and `FILES_*`; v1.2 adds no new env vars;
+  production requires unique `APP_SECRET`, strong seed passwords, `SITE_ADDRESS`, `APP_ORIGIN`, `COOKIE_SECURE=true`, `TRUST_PROXY=loopback,linklocal,uniquelocal` (set by Compose).
 - Health: `/api/health`; Compose healthchecks for app and sandbox; Caddy waits for app.
 - Backup: `node dist/backup.js` uses SQLite `VACUUM INTO`; retain 14 days; schedule from host cron and copy to Aliyun OSS. Restore = stop app, replace DB file, start app.
 - Update: `git pull && docker compose up -d --build`; migrations run at boot. Rollback app image; restore DB backup if schema incompatible.

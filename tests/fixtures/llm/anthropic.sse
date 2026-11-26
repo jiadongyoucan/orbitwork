@@ -1,0 +1,7 @@
+data: {"choices":[{"delta":{"role":"assistant","thinking":"先评估风险。"}}]}
+
+data: {"choices":[{"delta":{"content":"建议分两步。"}}]}
+
+data: {"choices":[],"usage":{"prompt_tokens":9,"completion_tokens":11,"cache_read_input_tokens":3}}
+
+data: [DONE]

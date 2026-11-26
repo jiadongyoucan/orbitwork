@@ -13,3 +13,10 @@ dist
 test-results
 playwright-report
 .DS_Store
+
+# release artifacts
+output/*.zip
+backups/
+
+# memory plugin local store
+.memsearch/

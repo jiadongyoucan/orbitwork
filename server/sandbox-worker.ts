@@ -2,6 +2,7 @@ import { createServer } from 'node:http';
 import { mkdir, mkdtemp, readFile, readdir, realpath, rename, rm, stat, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { spawn } from 'node:child_process';
+import { sandboxPermissionFlags } from './domain/sandbox-permissions.js';
 
 /**
  * Isolated sandbox worker. It owns no database, no application secrets and no
@@ -64,7 +65,7 @@ async function execute(code: string): Promise<Result> {
   try {
     return await runProcess(
       process.execPath,
-      ['--permission', '--allow-fs-read=/tmp', '--allow-fs-read=/private/tmp', `--allow-fs-read=${dir}`, `--allow-fs-read=${realDir}`, '--frozen-intrinsics', '--max-old-space-size=128', '--no-warnings', file],
+      [...sandboxPermissionFlags(dir, realDir), file],
       dir,
     );
   } finally {

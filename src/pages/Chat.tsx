@@ -1,17 +1,19 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Link, useLocation, useNavigate, useParams } from 'react-router-dom';
 import {
-  ArrowDown, ArrowLeft, ArrowUp, Bot, Check, ChevronDown, CircleStop, Clock3, Copy, Cpu,
+  Activity, ArrowDown, ArrowLeft, ArrowUp, Bot, Check, ChevronDown, CircleStop, Clock3, Copy, Cpu,
   Loader2, MessageSquareText, MoreHorizontal, PanelLeft, RefreshCw, Sparkles, SquarePen, Terminal,
   Wrench, X, Zap,
 } from 'lucide-react';
 import { api, errorMessage, streamChat } from '@/lib/api';
 import { useAuth } from '@/context/AuthContext';
 import { useToast } from '@/context/ToastContext';
-import type { Agent, Message, ModelOption, ToolEvent } from '@/lib/types';
+import type { Agent, Message, ModelOption, ToolEvent, TraceEvent } from '@/lib/types';
 import { Badge, CopyButton, Spinner } from '@/components/UI';
 import { Icon } from '@/components/Icon';
 import { Markdown } from '@/components/Markdown';
+import { ReasoningBlock } from '@/components/ReasoningBlock';
+import { TraceDrawer } from '@/components/TraceDrawer';
 import { cn, copyText, relativeTime, safeJson } from '@/lib/utils';
 
 type ChatDetail = {
@@ -64,12 +66,7 @@ function MessageItem({ message, agent, streaming }: { message: Message; agent: C
           {message.status === 'error' && <Badge tone="danger">未完成</Badge>}
           {message.status === 'cancelled' && <Badge tone="warn">已停止</Badge>}
         </div>
-        {message.reasoning ? (
-          <details style={{ marginBottom: 8 }}>
-            <summary style={{ cursor: 'pointer', fontSize: 11, color: 'var(--faint)' }}>推理过程</summary>
-            <div style={{ marginTop: 7, padding: '9px 11px', borderLeft: '2px solid var(--line-strong)', color: 'var(--faint)', fontSize: 11.5, lineHeight: 1.6, whiteSpace: 'pre-wrap' }}>{message.reasoning}</div>
-          </details>
-        ) : null}
+        {message.reasoning ? <ReasoningBlock text={message.reasoning} streaming={streaming} durationMs={message.reasoningMs} /> : null}
         {message.toolEvents?.map((event) => <ToolEventCard key={event.id} event={event} />)}
         {message.content ? (
           <Markdown content={message.content} />
@@ -104,6 +101,8 @@ export default function ChatPage() {
   const [streaming, setStreaming] = useState(false);
   const [runId, setRunId] = useState<string | null>(null);
   const [error, setError] = useState('');
+  const [traceOpen, setTraceOpen] = useState(false);
+  const [liveTrace, setLiveTrace] = useState<TraceEvent[]>([]);
   const [input, setInput] = useState('');
   const [titleDraft, setTitleDraft] = useState('');
   const [editingTitle, setEditingTitle] = useState(false);
@@ -112,15 +111,32 @@ export default function ChatPage() {
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const initialSent = useRef(false);
   const streamMessageId = useRef<string | null>(null);
+  const streamStartedAt = useRef(0);
+  const streamRunId = useRef<string | null>(null);
+  const runToken = useRef(0);
+  const chatIdRef = useRef<string | undefined>(chatId);
+  chatIdRef.current = chatId;
   const hasLoaded = useRef(false);
 
-  const load = useCallback(async (silent = false) => {
+  const load = useCallback(async (silent = false, preserveStreamKey = false) => {
     if (!workspace || !chatId) return;
     if (!silent) setLoading(true);
     try {
       const data = await api.get<ChatDetail>(`/api/w/${workspace.id}/chats/${chatId}`);
       setDetail(data);
-      setMessages(data.messages);
+      const last = data.messages[data.messages.length - 1];
+      const keepStreamKey = preserveStreamKey
+        && streamMessageId.current
+        && last?.role === 'assistant'
+        && (last.createdAt ?? 0) >= streamStartedAt.current
+        && (!streamRunId.current || last.runId === streamRunId.current);
+      setMessages(keepStreamKey
+        ? data.messages.map((message, index) => (
+            index === data.messages.length - 1
+              ? { ...message, id: streamMessageId.current as string }
+              : message
+          ))
+        : data.messages);
       setTitleDraft(data.chat.title);
       setError('');
     } catch (caught) {
@@ -129,6 +145,11 @@ export default function ChatPage() {
       setLoading(false);
     }
   }, [workspace, chatId]);
+
+  useEffect(() => {
+    setLiveTrace([]);
+    setTraceOpen(false);
+  }, [chatId]);
 
   useEffect(() => {
     void load();
@@ -165,14 +186,18 @@ export default function ChatPage() {
   async function sendMessage(text: string) {
     if (!workspace || !chatId || !text.trim() || streaming) return;
     const content = text.trim();
+    const activeChatId = chatId;
+    const token = ++runToken.current;
     setInput('');
     setError('');
     setStreaming(true);
     setRunId(null);
+    setLiveTrace([]);
     const now = Date.now();
     const optimisticUser: Message = { id: `local-user-${now}`, role: 'user', content, createdAt: now };
     const placeholderId = `local-assistant-${now}`;
     streamMessageId.current = placeholderId;
+    streamStartedAt.current = now;
     setMessages((current) => [
       ...current,
       optimisticUser,
@@ -188,6 +213,7 @@ export default function ChatPage() {
         (event) => {
           if (event.type === 'meta') {
             setRunId(event.runId);
+            streamRunId.current = event.runId;
             if (event.demo) setDemo(true);
           }
           if (event.type === 'delta') {
@@ -195,6 +221,10 @@ export default function ChatPage() {
           }
           if (event.type === 'reasoning') {
             setMessages((current) => current.map((message) => message.id === placeholderId ? { ...message, reasoning: `${message.reasoning ?? ''}${event.text}` } : message));
+          }
+          if (event.type === 'trace' && event.event) {
+            const incoming = event.event as TraceEvent;
+            setLiveTrace((current) => current.some((item) => item.seq === incoming.seq) ? current : [...current, incoming]);
           }
           if (event.type === 'tool') {
             setMessages((current) => current.map((message) => message.id === placeholderId ? { ...message, toolEvents: [...(message.toolEvents ?? []), event.event] } : message));
@@ -215,11 +245,13 @@ export default function ChatPage() {
         toast.push(errorMessage(caught), 'error');
       }
     } finally {
+      // A chat switch aborts the stream; never let the old closure mutate the new chat.
+      if (chatIdRef.current !== activeChatId || runToken.current !== token) return;
       abortRef.current = null;
       setStreaming(false);
       setRunId(null);
       window.dispatchEvent(new Event('orbit:chats-changed'));
-      await load(true);
+      await load(true, true);
       requestAnimationFrame(() => textareaRef.current?.focus());
     }
   }
@@ -295,6 +327,7 @@ export default function ChatPage() {
         <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
           {demo && <Link to="/app/settings" className="badge badge-warn" title="未配置模型"><Zap size={10} />DEMO</Link>}
           <span className="badge badge-muted"><Cpu size={10} />{modelLabel}</span>
+          <button className="btn btn-ghost btn-icon" onClick={() => setTraceOpen(true)} aria-label="查看对话轨迹" title="对话轨迹"><Activity size={15} /></button>
           <button className="btn btn-ghost btn-icon" onClick={() => void load(true)} aria-label="刷新"><RefreshCw size={15} /></button>
         </div>
       </div>
@@ -362,6 +395,16 @@ export default function ChatPage() {
           </div>
         </div>
       </div>
+
+      {workspace && chatId && (
+        <TraceDrawer
+          open={traceOpen}
+          onClose={() => setTraceOpen(false)}
+          workspaceId={workspace.id}
+          chatId={chatId}
+          liveEvents={liveTrace}
+        />
+      )}
     </div>
   );
 }

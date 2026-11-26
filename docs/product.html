@@ -33,6 +33,8 @@
     <a href="#agents">智能体工作台</a>
     <a href="#memory">记忆</a>
     <a href="#sandbox">沙箱</a>
+    <a href="#network-files">联网与文件</a>
+    <a href="#trace-thinking">轨迹与思考</a>
     <a href="#assets">专家 / 技能 / 连接器</a>
     <a href="#marketplace">插件市场</a>
     <a href="#permissions">权限与治理</a>
@@ -68,7 +70,7 @@
         <div class="card"><div class="kicker">Capability</div><h3>能力可组装</h3><p class="small">角色指令 × 技能 × 连接器 × 记忆 × 沙箱，组合成专属智能体。</p></div>
         <div class="card"><div class="kicker">Network</div><h3>市场可流通</h3><p class="small">专家/技能/连接器可发布，插件可一键安装；版本快照不可变。</p></div>
       </div>
-      <div class="callout"><strong>当前交付状态：</strong>产品、架构、前后端、数据库迁移、测试、Docker 配置与产品/架构文档均已落在本仓库；23 项自动化测试通过，TypeScript 类型检查通过。生产运行前只需替换环境变量中的密钥与管理员密码。</div>
+      <div class="callout"><strong>当前交付状态：</strong>产品、架构、前后端、数据库迁移、测试、Docker 配置与产品/架构文档均已落在本仓库；63 项自动化测试通过，TypeScript 类型检查通过。生产运行前只需替换环境变量中的密钥与管理员密码。</div>
     </section>
 
     <section id="benchmark">
@@ -187,7 +189,7 @@
         <div class="card"><h3>长期记忆</h3><p class="small">开启后，系统注入与当前输入匹配（关键词）的最近记忆，并提供 <code>save_memory</code> 工具。关闭后该智能体完全无记忆上下文。</p></div>
         <div class="card"><h3>代码沙箱</h3><p class="small">开启后可调用 <code>run_javascript</code>；工作区设置可整体关闭沙箱，优先级高于智能体设置。</p></div>
       </div>
-      <p>运行时会组装：角色指令 + 工作区名称/日期/用户 + 已绑定技能指令 + 相关记忆 + 工具定义。工具循环最多 3 次模型调用；工具输出被标记为不可信外部数据。配置文件位于 <code>server/application/agent-runtime.ts</code>。</p>
+      <p>运行时会组装：角色指令 + 工作区名称/日期/用户 + 已绑定技能指令 + 相关记忆 + 工具定义。工具循环默认 6 次（`AGENT_MAX_STEPS`，上限 12），达到上限会在回答末尾显式提示；发送前按 token 预算裁剪历史（固定首条 user、旧工具结果压成一行），工具输出被标记为不可信外部数据。配置文件位于 <code>server/application/agent-runtime.ts</code>。</p>
     </section>
 
     <section id="memory">
@@ -211,11 +213,96 @@
         <div class="card"><h3>无凭据</h3><p class="small">容器不挂载数据库、不注入 APP_SECRET / API Key；只挂载代码队列卷。</p></div>
         <div class="card"><h3>资源上限</h3><p class="small">只读根文件系统、非 root、cap_drop ALL、128 PID、256 MB、0.5 CPU、6 秒超时、24KB 输出。</p></div>
       </div>
+      <div class="callout warn"><strong>定位（v1.3 起）：</strong>这是<strong>受限脚本执行</strong>，服务对象是内部半可信脚本，不是「可运行用户上传代码」的安全沙箱。需要后者时应引入 gVisor / E2B 等强隔离方案，当前实现保留为离线降级路径。</div>
       <figure class="shot"><img src="./assets/sandbox.png" alt="沙箱页面" /><figcaption>代码沙箱：模板、运行结果、隔离边界说明。</figcaption></figure>
     </section>
 
+    <section id="network-files">
+      <div class="section-kicker">11 · Network &amp; files</div>
+      <h2>受控联网与工作区文件（v1.1）</h2>
+      <p>v1 的智能体只能在 6 秒离线沙箱里算数：查不了资料，也没有文件可读。v1.1 补上真实工作流需要的两条通道，但<strong>不改变沙箱的离线边界</strong>——联网由服务端工具完成，文件是工作区级持久资产。</p>
+
+      <div class="arch-grid">
+        <div class="arch-box">
+          <strong>联网：web_fetch</strong>
+          <p>服务端抓取公开网页并转成可读文本。私网、回环、云元数据地址一律拒绝；重定向逐跳复检；响应 1MB / 15s 上限；每次回复最多 5 次。</p>
+        </div>
+        <div class="arch-box">
+          <strong>文件：工作区资产</strong>
+          <p>上传、列表、预览、下载、删除。智能体通过 list_files / read_file / write_file 读写；同一工作区同名覆盖，产物与上传物共享命名空间。</p>
+        </div>
+        <div class="arch-box">
+          <strong>可治理</strong>
+          <p>设置页两个开关（联网 / 文件）由管理员控制。关闭后工具不再注册、接口直接 403；上传与删除写入工作区审计。</p>
+        </div>
+      </div>
+
+      <figure class="shot"><img src="./assets/files.png" alt="工作区文件页" /><figcaption>文件页：拖拽上传、配额进度、逐文件预览/下载/删除；智能体读写的是同一份工作区资产。</figcaption></figure>
+
+      <h3>核心旅程</h3>
+      <ol>
+        <li>在「文件」页拖入资料，列表显示大小、时间与「是否可读」。</li>
+        <li>在对话里说「读一下 report.md，按行业补齐竞品」。</li>
+        <li>智能体 <code>list_files</code> → <code>read_file</code>（超长自动分页）→ <code>web_fetch</code> 抓公开页面 → <code>write_file</code> 输出新文件。</li>
+        <li>用户在「文件」页预览或下载产物；同名再写即覆盖，不产生版本爆炸。</li>
+      </ol>
+
+      <h3>工具契约</h3>
+      <table>
+        <thead><tr><th>工具</th><th>参数</th><th>行为</th><th>限额</th></tr></thead>
+        <tbody>
+          <tr><td><code>web_fetch</code></td><td>url, max_chars?</td><td>抓取 → HTML 转文本 → 标注「不可信外部数据」</td><td>5 次/回复，1MB，15s</td></tr>
+          <tr><td><code>list_files</code></td><td>limit?</td><td>返回文件名、大小、更新时间</td><td>最多 100 行</td></tr>
+          <tr><td><code>read_file</code></td><td>name, offset?</td><td>读文本，约 7.6k 字符/次，可分页</td><td>单次 ≤ 8KB 工具结果</td></tr>
+          <tr><td><code>write_file</code></td><td>name, content</td><td>创建或覆盖，产物出现在「文件」页</td><td>受工作区配额约束</td></tr>
+        </tbody>
+      </table>
+
+      <h3>安全与体验边界</h3>
+      <ul>
+        <li>抓取内容与文件内容在提示词中被明确标为「不可信数据」，不得当作指令执行。</li>
+        <li>文件名不进入系统提示（只给文件数量），从源头消除「文件名注入」。</li>
+        <li>配额：单文件 5MB、工作区 200MB / 500 个；超限返回可解释错误码，不静默截断。</li>
+        <li>仅文本类可预览与 <code>read_file</code>；二进制只下载。v1.1 不做 PDF/Office 解析与向量检索。</li>
+      </ul>
+
+      <div class="callout"><strong>验收：</strong>上传 → 读取 → 抓取 → 写回 → 下载全链路可用；关闭开关后工具与接口同时失效；跨工作区访问一律 404；SSRF 表格（含 IPv6 / NAT64 / 元数据地址）全部拒绝。</div>
+    </section>
+
+    <section id="trace-thinking">
+      <div class="section-kicker">12 · Trace &amp; thinking</div>
+      <h2>对话轨迹与思考过程</h2>
+      <p>每次回答都可以回放：提示构建、模型调用、首 token、工具执行、错误与耗时。推理过程默认折叠，需要时展开查看全文，既保留信任感，也不打断阅读。</p>
+
+      <div class="arch-grid">
+        <div class="arch-box"><strong>轨迹是什么</strong><p>按 seq 递增的结构化事件流：谁在什么时间做了什么、花了多久、是否失败。只记元数据，不记提示词正文与工具输出。</p></div>
+        <div class="arch-box"><strong>思考过程</strong><p>折叠头显示「已思考 Ns · M 字」，流式中显示「思考中…」；展开可读完整推理，并可一键复制。</p></div>
+        <div class="arch-box"><strong>排查路径</strong><p>回答慢 → 看首 token 与工具耗时；失败 → 只看错误；复现 → 复制 Markdown 轨迹给同事。</p></div>
+      </div>
+
+      <figure class="shot"><img src="./assets/reasoning.png" alt="思考过程展开" /><figcaption>思考过程：默认折叠，展开后显示完整推理与复制入口。</figcaption></figure>
+
+      <h3>轨迹事件</h3>
+      <table>
+        <thead><tr><th>事件</th><th>触发时机</th><th>记录内容</th></tr></thead>
+        <tbody>
+          <tr><td><code>run.start</code></td><td>一次回答开始</td><td>模型、智能体、是否演示模式</td></tr>
+          <tr><td><code>prompt.ready</code></td><td>系统提示构建完成</td><td>字符数、工具名、文件数、记忆数、历史条数</td></tr>
+          <tr><td><code>model.call</code></td><td>每次模型请求</td><td>轮次、消息数、可用工具数</td></tr>
+          <tr><td><code>model.first_token</code></td><td>首个 token</td><td>首字延迟（ms）</td></tr>
+          <tr><td><code>tool.call</code></td><td>每次工具执行后</td><td>工具名、状态、输入/输出字符数、耗时；抓取只记 host</td></tr>
+          <tr><td><code>run.done</code> / <code>run.error</code></td><td>结束</td><td>状态、token、总耗时、思考耗时；错误脱敏后截断</td></tr>
+        </tbody>
+      </table>
+
+      <figure class="shot"><img src="./assets/trace.png" alt="对话轨迹抽屉" /><figcaption>轨迹抽屉：运行摘要、逐事件耗时与状态、运行记录，可复制为 Markdown。</figcaption></figure>
+      <figure class="shot"><img src="./assets/trace-metrics.png" alt="轨迹指标与导出" /><figcaption>v1.3：总耗时 / 模型 / 工具 / 首 token 四宫格，以及 JSON / Markdown 导出。</figcaption></figure>
+
+      <div class="callout"><strong>验收：</strong>发一条消息后轨迹至少包含 5 类事件且 seq 递增；他人会话的轨迹返回 404；删除会话后轨迹级联清除；推理默认折叠，展开状态在生成完成后保持；关闭推理时（非推理模型）不显示该块。</div>
+    </section>
+
     <section id="assets">
-      <div class="section-kicker">11 · Capability assets</div>
+      <div class="section-kicker">13 · Capability assets</div>
       <h2>专家、技能、连接器</h2>
       <div class="grid-3">
         <div class="card"><div class="kicker">Expert</div><h3>专家</h3><p class="small">封装角色、方法、系统提示词与推荐模型。安装后可“启用”为智能体并立刻对话。专家不是模型微调，而是可版本化的角色模板。</p></div>
@@ -234,7 +321,7 @@ suspended                      回到 draft（私有，需重新发布）</div>
     </section>
 
     <section id="marketplace">
-      <div class="section-kicker">12 · Marketplace</div>
+      <div class="section-kicker">14 · Marketplace</div>
       <h2>插件市场：能力流动，边界不动</h2>
       <figure class="shot"><img src="./assets/market.png" alt="插件市场" /><figcaption>插件市场：精选、搜索、类型筛选、安装与收藏。</figcaption></figure>
       <ul>
@@ -248,7 +335,7 @@ suspended                      回到 draft（私有，需重新发布）</div>
     </section>
 
     <section id="permissions">
-      <div class="section-kicker">13 · Governance</div>
+      <div class="section-kicker">15 · Governance</div>
       <h2>权限模型</h2>
       <table>
         <thead><tr><th>能力</th><th>所有者</th><th>管理员</th><th>成员</th><th>平台管理员</th></tr></thead>
@@ -268,7 +355,7 @@ suspended                      回到 draft（私有，需重新发布）</div>
     </section>
 
     <section id="acceptance">
-      <div class="section-kicker">14 · Acceptance</div>
+      <div class="section-kicker">16 · Acceptance</div>
       <h2>验收清单</h2>
       <ul class="checklist">
         <li><span class="tick">✓</span><div><strong>账户与权限：</strong>注册、登录、登出、会话过期、改密、邀请接受、按角色拒绝越权；自动化测试覆盖跨租户与同租户私有会话。</div></li>
@@ -277,15 +364,15 @@ suspended                      回到 draft（私有，需重新发布）</div>
         <li><span class="tick">✓</span><div><strong>沙箱：</strong>本地 HTTP worker 与生产文件队列；权限与超时验证；工作区开关。</div></li>
         <li><span class="tick">✓</span><div><strong>市场：</strong>发布、安装、收藏、插件打包、版本快照、密钥不泄漏、下架/恢复、安装计数回退。</div></li>
         <li><span class="tick">✓</span><div><strong>权限隔离：</strong>工作区 404、会话私有、成员记忆授权、平台管理员边界、Origin/JSON/速率限制。</div></li>
-        <li><span class="tick">✓</span><div><strong>工程：</strong>迁移 runner、WAL 备份、类型检查、23 项测试、生产构建 < 300ms。</div></li>
+        <li><span class="tick">✓</span><div><strong>工程：</strong>迁移 runner、WAL 备份、类型检查、63 项测试、生产构建 < 300ms。</div></li>
         <li><span class="tick">✓</span><div><strong>部署：</strong>Dockerfile、Compose、Caddy TLS/SSE、沙箱网络隔离、环境变量样例、健康检查。</div></li>
         <li><span class="tick todo">◷</span><div><strong>后续：</strong>真实模型联调（需提供 API Key）、Docker 本机实机启动（当前构建环境无容器守护进程）、生产 TLS 域名验证。</div></li>
       </ul>
-      <div class="callout warn"><strong>测试数字：</strong>本仓库当前为 <strong>23/23</strong> 自动化测试通过（见 <code>npm test</code>）；产品的最终验收仍需要在目标环境配置真实 LLM Key，并执行一次 Docker Compose 启动与浏览器端到端冒烟。</div>
+      <div class="callout warn"><strong>测试数字：</strong>本仓库当前为 <strong>63/63</strong> 自动化测试通过（见 <code>npm test</code>）；产品的最终验收仍需要在目标环境配置真实 LLM Key，并执行一次 Docker Compose 启动与浏览器端到端冒烟。</div>
     </section>
 
     <section id="limits">
-      <div class="section-kicker">15 · Boundaries</div>
+      <div class="section-kicker">17 · Boundaries</div>
       <h2>已知边界与路线图</h2>
       <div class="grid-2">
         <div class="card"><h3>V1 不包含</h3><ul class="small"><li>文件上传 / RAG / 知识库</li><li>定时任务与后台自动化</li><li>计费、套餐与组织配额</li><li>邮件验证与自助找回密码</li><li>OAuth / SSO / MFA</li><li>SSE 断线字节级续传</li><li>多实例水平扩展</li></ul></div>

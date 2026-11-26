@@ -8,6 +8,7 @@ import { chatInputSchema, messageInputSchema } from '../../domain/schemas.js';
 import { assertModel, createRun, ensureChat, runAgent, cancelRun, expireStaleRuns, isRunActive, type RuntimeEvent } from '../../application/agent-runtime.js';
 import { checkRateKey } from '../rate-limit.js';
 import { defaultModel, models } from '../../config.js';
+import { listTrace } from '../../infrastructure/trace.js';
 
 function sse(reply: FastifyReply, seq: { value: number }, event: RuntimeEvent | { type: string; [key: string]: unknown }) {
   seq.value += 1;
@@ -73,6 +74,8 @@ export async function chatRoutes(app: FastifyInstance, db: DB) {
       model: row.model,
       inputTokens: row.input_tokens,
       outputTokens: row.output_tokens,
+      reasoningMs: row.reasoning_ms ?? 0,
+      runId: row.run_id ?? null,
       createdAt: row.created_at,
     }));
     const agent = (chat as { agent_id: string | null }).agent_id
@@ -190,5 +193,90 @@ export async function chatRoutes(app: FastifyInstance, db: DB) {
       .prepare('SELECT id, chat_id, status, model, tokens_in, tokens_out, started_at, finished_at FROM runs WHERE workspace_id = ? AND user_id = ? ORDER BY started_at DESC LIMIT 30')
       .all(ctx.workspace.id, ctx.user.id);
     return { runs: rows, models: models() };
+  });
+
+function loadTracePayload(db: DB, workspaceId: string, userId: string, chatId: string, limit: number) {
+  const chat = db
+    .prepare('SELECT id FROM chats WHERE id = ? AND workspace_id = ? AND user_id = ?')
+    .get(chatId, workspaceId, userId);
+  if (!chat) throw notFound('会话不存在');
+
+  const runs = db
+    .prepare('SELECT id, status, model, tokens_in, tokens_out, error, started_at, finished_at FROM runs WHERE chat_id = ? AND workspace_id = ? ORDER BY started_at DESC LIMIT 20')
+    .all(chatId, workspaceId) as Array<{
+      id: string; status: string; model: string; tokens_in: number; tokens_out: number;
+      error: string; started_at: number; finished_at: number | null;
+    }>;
+  const events = listTrace(db, workspaceId, chatId, limit);
+  const totalEvents = (db.prepare('SELECT COUNT(*) AS n FROM trace_events WHERE chat_id = ? AND workspace_id = ?').get(chatId, workspaceId) as { n: number }).n;
+
+  const totals = runs.reduce(
+    (accumulator, run) => {
+      accumulator.durationMs += (run.finished_at ?? now()) - run.started_at;
+      if (run.status === 'error') accumulator.errors += 1;
+      return accumulator;
+    },
+    { events: events.length, durationMs: 0, errors: 0 },
+  );
+  const sumOf = (kind: string) => events.filter((event) => event.kind === kind).reduce((sum, event) => sum + event.durationMs, 0);
+
+  return {
+    runs: runs.map((run) => ({
+      id: run.id, status: run.status, model: run.model,
+      tokensIn: run.tokens_in, tokensOut: run.tokens_out, error: run.error,
+      startedAt: run.started_at, finishedAt: run.finished_at,
+    })),
+    events,
+    totals: {
+      ...totals,
+      tokensIn: runs.reduce((sum, run) => sum + run.tokens_in, 0),
+      tokensOut: runs.reduce((sum, run) => sum + run.tokens_out, 0),
+    },
+    metrics: {
+      // All four figures come from the same trace window so they add up.
+      totalMs: sumOf('run.done'),
+      modelMs: sumOf('model.done'),
+      toolMs: sumOf('tool.call'),
+      firstTokenMs: [...events].reverse().find((event) => event.kind === 'model.first_token')?.durationMs ?? 0,
+    },
+    truncated: totalEvents > events.length,
+    totalEvents,
+  };
+}
+
+function renderTraceMarkdown(payload: ReturnType<typeof loadTracePayload>, chatId: string): string {
+  const escape = (value: unknown) => String(value ?? '').replace(/\|/g, '\\|').replace(/`/g, "'").replace(/\r?\n/g, ' ');
+  return [
+    `# 对话轨迹 ${chatId}`,
+    '',
+    `- 运行：${payload.runs.length} 次`,
+    `- 总耗时：${(payload.metrics.totalMs / 1000).toFixed(2)}s`,
+    `- 模型耗时：${(payload.metrics.modelMs / 1000).toFixed(2)}s`,
+    `- 工具耗时：${(payload.metrics.toolMs / 1000).toFixed(2)}s`,
+    `- 首 token：${payload.metrics.firstTokenMs}ms`,
+    `- tokens：${payload.totals.tokensIn} in / ${payload.totals.tokensOut} out`,
+    '',
+    '| seq | 时间 | 类型 | 状态 | 耗时 | 细节 |',
+    '|---|---|---|---|---|---|',
+    ...payload.events.map((event) => `| ${event.seq} | ${new Date(event.at).toISOString()} | ${event.kind} | ${event.status} | ${event.durationMs}ms | \`${escape(JSON.stringify(event.detail))}\` |`),
+  ].join('\n');
+}
+
+  app.get('/api/w/:workspaceId/chats/:id/trace', async (request) => {
+    const ctx = requireWorkspace(request, db);
+    const { id } = request.params as { id: string };
+    const limit = Math.min(Math.max(Number((request.query as { limit?: string }).limit ?? 200), 1), 500);
+    return loadTracePayload(db, ctx.workspace.id, ctx.user.id, id, limit);
+  });
+
+  app.get('/api/w/:workspaceId/chats/:id/trace/export', async (request, reply) => {
+    const ctx = requireWorkspace(request, db);
+    const { id } = request.params as { id: string };
+    const format = (request.query as { format?: string }).format === 'md' ? 'md' : 'json';
+    const payload = loadTracePayload(db, ctx.workspace.id, ctx.user.id, id, 500);
+    const filename = `orbitwork-trace-${id.slice(0, 8)}.${format}`;
+    reply.header('content-disposition', `attachment; filename="${filename}"`);
+    reply.header('content-type', format === 'md' ? 'text/markdown; charset=utf-8' : 'application/json; charset=utf-8');
+    return format === 'md' ? renderTraceMarkdown(payload, id) : JSON.stringify(payload, null, 2);
   });
 }

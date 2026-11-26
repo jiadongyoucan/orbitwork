@@ -141,6 +141,8 @@ export const settingsSchema = z
     allowMemberPublish: z.boolean().optional(),
     sandboxEnabled: z.boolean().optional(),
     memoryEnabled: z.boolean().optional(),
+    networkEnabled: z.boolean().optional(),
+    filesEnabled: z.boolean().optional(),
   })
   .strict();
 

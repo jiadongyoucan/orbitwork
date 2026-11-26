@@ -110,3 +110,25 @@ export function errorMessage(error: unknown): string {
   if (error instanceof Error) return error.message;
   return '发生未知错误';
 }
+
+/** Raw-body upload; the server only accepts octet-stream on the file route. */
+export async function uploadFile(workspaceId: string, file: File): Promise<void> {
+  const params = new URLSearchParams({ name: file.name, mime: file.type || 'application/octet-stream' });
+  const response = await fetch(`/api/w/${workspaceId}/files?${params.toString()}`, {
+    method: 'POST',
+    credentials: 'same-origin',
+    headers: { 'content-type': 'application/octet-stream' },
+    body: file,
+  });
+  if (response.ok) return;
+  let message = '上传失败';
+  let code = 'UPLOAD_FAILED';
+  try {
+    const payload = await response.json();
+    message = payload?.error?.message ?? message;
+    code = payload?.error?.code ?? code;
+  } catch {
+    /* keep defaults */
+  }
+  throw new ApiError(response.status, code, message);
+}

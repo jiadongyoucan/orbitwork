@@ -34,6 +34,8 @@
     <a href="#sse">SSE 生命周期</a>
     <a href="#market">市场与版本</a>
     <a href="#sandbox">沙箱威胁模型</a>
+    <a href="#network-files">联网与文件</a>
+    <a href="#trace-thinking">轨迹与思考</a>
     <a href="#connector">连接器安全</a>
     <a href="#api">API 参考</a>
     <a href="#frontend">前端与构建</a>
@@ -237,13 +239,17 @@ users ──&lt; platform_audit_logs</code></pre>
   ├─ persist assistant message, usage, run(complete/error/cancelled)
   └─ SSE done | error</code></pre>
       <h3>提示词组装</h3>
-      <p>系统提示 = 智能体名称/角色指令 + 工作区名称/日期/用户 + 已绑定技能指令 + 相关记忆（最多 6 条）+ 行为准则。工具输出被标记为不可信外部数据；模型最多 3 轮工具循环，防止成本失控。</p>
+      <p>系统提示 = 智能体名称/角色指令 + 工作区名称/日期/用户 + 已绑定技能指令 + 相关记忆（最多 6 条）+ 行为准则。工具输出被标记为不可信外部数据。v1.3 起历史按 token 预算裁剪（`server/domain/context.ts`：CJK≈0.7 token/字、ASCII≈0.25，固定首条 user，旧工具结果压成一行），工具循环默认 6 步（`AGENT_MAX_STEPS`，上限 12），达上限在回答中显式提示。</p>
+      <h3>LLM 接入层（v1.3）</h3>
+      <p><code>server/infrastructure/llm.ts</code> 暴露单一 <code>LlmPort</code>（<code>stream(options) → ModelResult</code>），调用方零改动。<code>LLM_ADAPTER</code> 只切两个能力位：<code>legacy</code> 仅读 <code>reasoning_content</code> 且不重试；<code>port</code> 归一并归一 <code>reasoning / thinking / thought</code>，并在**首包前**对 429/5xx/网络错误重试最多 2 次（指数退避、尊重 <code>Retry-After</code>，流一旦开始则不再重试）。usage 统一为 <code>input / output / cachedInput</code>。</p>
       <h3>工具</h3>
       <ul>
         <li><code>save_memory</code> / <code>search_memories</code>：仅在智能体开启记忆且工作区未关闭记忆时暴露。</li>
         <li><code>run_javascript</code>：仅在智能体与工作区均开启沙箱时暴露；调用独立 worker。</li>
         <li>连接器：每个绑定连接器生成一个函数工具，schema 来自资产 payload。</li>
       </ul>
+      <h3>轨迹消费（v1.3）</h3>
+      <p>新增 <code>model.done</code> 事件，用于把模型耗时与工具耗时分开归因；<code>GET /chats/:id/trace</code> 返回 <code>metrics</code>（总耗时 / 模型 / 工具 / 首 token），<code>/trace/export?format=json|md</code> 以附件形式导出。</p>
       <h3>失败与取消</h3>
       <p>运行前写 run 记录；取消调用 <code>POST /runs/:id/cancel</code> 触发 AbortController；客户端断开同样中止。无论成功/失败/取消，finally 都会落库助手消息（允许空内容 + 状态），并清理运行表。服务重启时所有 <code>running</code> 被置为 cancelled，避免会话永久锁死。</p>
     </section>
@@ -307,8 +313,105 @@ delete clone:
       <p>worker 自身是可信代码；Node 权限模型不等于内核级沙箱，内核漏洞逃逸仍是理论风险。高合规场景建议替换为 Firecracker/gVisor 或独立节点执行。V1 不提供 Python/npm 包能力。</p>
     </section>
 
+    <section id="network-files">
+      <div class="section-kicker">12 · Network &amp; files</div>
+      <h2>联网与文件子系统</h2>
+      <p>两个能力都实现在 app 进程内，沙箱保持 <code>network:none</code>。这样不破坏既有威胁模型，也不引入新依赖（上传走 raw body，未引入 multipart）。</p>
+
+      <h3>数据与存储</h3>
+      <p>migration v3 新增 <code>files</code> 表（16 → 17 张表），以 <code>UNIQUE(workspace_id, name)</code> 表达「同名覆盖」。磁盘布局为 <code>&lt;DATA_DIR&gt;/files/&lt;workspaceId&gt;/&lt;fileId&gt;</code>；落盘名是 UUID，展示名只存元数据，因此路径穿越在结构上不成立。</p>
+      <pre class="diagram"><code>CREATE TABLE files (
+  id TEXT PRIMARY KEY,
+  workspace_id TEXT NOT NULL REFERENCES workspaces(id) ON DELETE CASCADE,
+  chat_id TEXT REFERENCES chats(id) ON DELETE SET NULL,
+  name TEXT NOT NULL, mime TEXT NOT NULL, size INTEGER NOT NULL,
+  sha256 TEXT NOT NULL, storage_key TEXT NOT NULL, text_preview TEXT NOT NULL DEFAULT '',
+  created_by TEXT NOT NULL REFERENCES users(id),
+  created_at INTEGER NOT NULL, updated_at INTEGER NOT NULL,
+  UNIQUE(workspace_id, name)
+);</code></pre>
+
+      <h3>请求链路</h3>
+      <pre class="diagram"><code>Browser ──octet-stream──► POST /api/w/:ws/files?name=&amp;mime=
+                            └─ 开关 → 名字规整 → 配额 → 写盘(temp+rename) → DB 行 → 审计
+
+Agent ──write_file──► putFile()（同上，同名覆盖）
+Agent ──read_file───► 文本前 100KB 窗口 → 按 offset 分页 7.6k 字符
+Agent ──web_fetch───► assertSafeUrl(allowPrivate:false)
+                       → 手动重定向（≤3 次，逐跳复检）
+                       → 1MB 截断 / 15s 超时
+                       → HTML→文本 / JSON 美化</code></pre>
+
+      <h3>安全控制与残余风险</h3>
+      <table>
+        <thead><tr><th>控制</th><th>实现</th><th>残余风险</th></tr></thead>
+        <tbody>
+          <tr><td>SSRF</td><td>IPv4 非全球单播全拒；IPv6 覆盖 ULA / link-local / site-local / multicast / NAT64 / 6to4 / Teredo / IPv4-mapped；URL 内嵌凭据拒绝；<code>web_fetch</code> 强制 <code>allowPrivate:false</code>，不受 <code>ALLOW_PRIVATE_CONNECTORS</code> 影响</td><td>DNS rebinding 的 TOCTOU 仍存在（校验与连接各解析一次）；彻底修复需 connect 阶段固定 IP</td></tr>
+          <tr><td>重定向</td><td>不使用自动跟随；每一跳重新走守卫，最多 3 跳</td><td>—</td></tr>
+          <tr><td>体积/时间</td><td>响应 1MB 截断并取消流；15s 超时；文本 20k 字符上限</td><td>解压炸弹依赖上游 Content-Encoding 行为</td></tr>
+          <tr><td>上传</td><td>仅 <code>/api/w/:ws/files</code> 接受 octet-stream；单文件 5MB；文件名去路径与控制字符</td><td>仅单实例限流，无全局磁盘水位告警</td></tr>
+          <tr><td>下发</td><td>全局 <code>nosniff</code>；HTML/SVG 强制 attachment；图片 inline 但带 filename</td><td>图片解码漏洞取决于浏览器</td></tr>
+          <tr><td>注入</td><td>文件名不进系统提示；抓取/文件内容统一标注为不可信数据</td><td>模型仍可能被内容诱导，需人工复核高风险动作</td></tr>
+          <tr><td>租户</td><td>所有路由 <code>requireWorkspace</code>；跨工作区 404；删除工作区时清理 <code>FILES_DIR/&lt;ws&gt;</code></td><td>—</td></tr>
+        </tbody>
+      </table>
+
+      <h3>开关与可观测</h3>
+      <p><code>filesEnabled</code> / <code>networkEnabled</code> 存于 <code>workspaces.settings_json</code>，默认开启。关闭后：运行时不再注册对应工具；文件路由返回 403。审计事件为 <code>file.upload</code> / <code>file.delete</code>，web 抓取计入每次 run 的 <code>toolEvents</code>（含 URL、状态、字节数）。</p>
+
+      <h3>测试</h3>
+      <p>新增 18 项测试（文件 API 11 项、领域规则 5 项、SSRF 表格与重定向 2 项），全套 <strong>63/63</strong> 通过；typecheck 与生产构建通过。生产构建下实测：上传 → 列表 → 文本预览 → 下载头 → 磁盘 UUID 落盘 → migration v3；<code>web_fetch</code> 对 example.com 返回 200 并抽取标题，对 127.0.0.1 / 169.254.169.254 / [::1] 全部 <code>PRIVATE_URL</code>。</p>
+    </section>
+
+    <section id="trace-thinking">
+      <div class="section-kicker">13 · Trace &amp; thinking</div>
+      <h2>可观测性：轨迹与推理</h2>
+      <p>轨迹是 append-only 的元数据事件流，写入与 SSE 推送同源；推理文本只保留最终结果与耗时，不保存逐 token 流。</p>
+
+      <h3>数据模型（migration v4）</h3>
+      <pre class="diagram"><code>CREATE TABLE trace_events (
+  id TEXT PRIMARY KEY,
+  workspace_id TEXT NOT NULL REFERENCES workspaces(id) ON DELETE CASCADE,
+  chat_id TEXT NOT NULL REFERENCES chats(id) ON DELETE CASCADE,
+  run_id TEXT, seq INTEGER NOT NULL,
+  kind TEXT NOT NULL, phase TEXT NOT NULL DEFAULT '', status TEXT NOT NULL DEFAULT 'ok',
+  duration_ms INTEGER NOT NULL DEFAULT 0, detail_json TEXT NOT NULL DEFAULT '{}',
+  created_at INTEGER NOT NULL,
+  UNIQUE(chat_id, seq)
+);
+ALTER TABLE messages ADD COLUMN run_id TEXT;              -- 回答 ↔ run
+ALTER TABLE messages ADD COLUMN reasoning_ms INTEGER;     -- 思考耗时（按模型调用累计）</code></pre>
+
+      <h3>采集顺序与失败语义</h3>
+      <pre class="diagram"><code>run.start → prompt.ready → model.call → model.first_token
+  → tool.call (0..n, 含 web_fetch / read_file / write_file) → run.done | run.error</code></pre>
+      <ul>
+        <li>写入失败只记 <code>console.error</code>，不阻断流式；<code>seq</code> 由 <code>MAX(seq)+1</code> 生成，并由 <code>UNIQUE(chat_id, seq)</code> 兜底。</li>
+        <li>每会话上限 1000 条，超出即删除最旧一条；超过 1000 条时 API 返回 <code>truncated</code> 与 <code>totalEvents</code>。</li>
+        <li><code>reasoning_ms</code> 按每次模型调用累计，工具执行时间不会计入「已思考」。</li>
+      </ul>
+
+      <h3>隐私与保留</h3>
+      <table>
+        <thead><tr><th>数据</th><th>是否写入轨迹</th><th>说明</th></tr></thead>
+        <tbody>
+          <tr><td>提示词正文、文件内容、工具输出</td><td>否</td><td>只记长度/数量</td></tr>
+          <tr><td>网页 URL</td><td>仅 host</td><td>不记 query，避免泄露检索词</td></tr>
+          <tr><td>文件名</td><td>否</td><td>v1.2 起移除，避免用户内容进入轨迹</td></tr>
+          <tr><td>错误信息</td><td>脱敏后 120 字</td><td>过滤 sk-* / Bearer 令牌</td></tr>
+          <tr><td>保留</td><td>每会话 1000 条</td><td>随会话删除级联清除</td></tr>
+        </tbody>
+      </table>
+
+      <h3>前端</h3>
+      <p><code>ReasoningBlock</code> 默认折叠，流式中显示脉冲与「思考中…」，完成后显示持久化的「已思考 Ns」；生成结束后的静默刷新会保留占位消息的 key，避免折叠状态被重置。<code>TraceDrawer</code> 打开时经 REST 拉取，流式中通过 SSE <code>trace</code> 事件按 seq 合并，并提供「仅看错误」与「复制 Markdown」。</p>
+
+      <h3>测试</h3>
+      <p>新增 4 项测试：一次真实 run 的轨迹包含 5 类事件、seq 单调、meta 早于 trace、跨租户 404、limit 截断标记、删除会话后 404；每会话 1000 条保留上限与最旧裁剪；v3 数据库升级后补齐列；错误脱敏。全套 <strong>63/63</strong> 通过。UI 侧用无头 Chrome 验证折叠/展开、轨迹抽屉 5 条事件与 0 控制台错误。</p>
+    </section>
+
     <section id="connector">
-      <div class="section-kicker">12 · Connectors</div>
+      <div class="section-kicker">14 · Connectors</div>
       <h2>连接器安全</h2>
       <ul>
         <li><strong>协议：</strong>仅 HTTP/HTTPS；GET 参数拼接 query，POST 发送 JSON；12 秒超时；不跟随重定向。</li>
@@ -320,7 +423,7 @@ delete clone:
     </section>
 
     <section id="api">
-      <div class="section-kicker">13 · API</div>
+      <div class="section-kicker">15 · API</div>
       <h2>API 参考（摘要）</h2>
       <table>
         <thead><tr><th>方法 / 路径</th><th>权限</th><th>说明</th></tr></thead>
@@ -345,7 +448,7 @@ delete clone:
     </section>
 
     <section id="frontend">
-      <div class="section-kicker">14 · Frontend</div>
+      <div class="section-kicker">16 · Frontend</div>
       <h2>前端与构建</h2>
       <ul>
         <li>React 19 + React Router 7；单页应用；服务端由 Fastify 托管 <code>dist/public</code>。</li>
@@ -358,20 +461,20 @@ delete clone:
     </section>
 
     <section id="tests">
-      <div class="section-kicker">15 · Quality</div>
+      <div class="section-kicker">17 · Quality</div>
       <h2>测试策略与结果</h2>
       <table>
         <thead><tr><th>层级</th><th>工具</th><th>覆盖</th></tr></thead>
         <tbody>
           <tr><td>Domain unit</td><td>node:test</td><td>密码、AES-GCM 篡改、RBAC、SSRF、payload/plugin schema、文件 DB 迁移与备份</td></tr>
-          <tr><td>API integration</td><td>Fastify inject</td><td>注册/登录/登出；跨租户 404；同租户聊天隐私；邀请/RBAC；市场发布/安装/插件；密钥清洗；删除后重装；记忆授权；IP 轮换锁定；SSE 持久化；管理员审核；输入校验；stale run</td></tr>
+          <tr><td>API integration</td><td>Fastify inject</td><td>注册/登录/登出；跨租户 404；同租户聊天隐私；邀请/RBAC；市场发布/安装/插件；密钥清洗；删除后重装；记忆授权；IP 轮换锁定；SSE 持久化；管理员审核；输入校验；stale run；文件上传/覆盖/配额/租户隔离/开关；工具门禁</td></tr>
           <tr><td>Build</td><td>tsc + esbuild</td><td><code>npx tsc --noEmit</code> 零错误；生产 bundle 构建</td></tr>
           <tr><td>Manual UI</td><td>Headless Chrome + CDP</td><td>1440px / 390px 截图；登录、首页、对话流、市场安装、沙箱执行、管理台</td></tr>
         </tbody>
       </table>
       <pre><code>$ NODE_ENV=test npm test
-ℹ tests 23
-ℹ pass 20
+ℹ tests 41
+ℹ pass 41
 ℹ fail 0
 
 $ npx tsc --noEmit
@@ -383,7 +486,7 @@ $ node scripts/build.mjs
     </section>
 
     <section id="deploy">
-      <div class="section-kicker">16 · Deployment</div>
+      <div class="section-kicker">18 · Deployment</div>
       <h2>Docker 本地与阿里云部署</h2>
       <h3>本地一键启动</h3>
       <pre><code>cp .env.example .env
@@ -417,7 +520,7 @@ curl -f https://your.domain/api/health</code></pre>
     </section>
 
     <section id="ops">
-      <div class="section-kicker">17 · Operations</div>
+      <div class="section-kicker">19 · Operations</div>
       <h2>运维、备份与恢复</h2>
       <h3>备份</h3>
       <pre><code># 立即备份（容器内）
@@ -446,7 +549,7 @@ docker compose up -d --build
     </section>
 
     <section id="scale">
-      <div class="section-kicker">18 · Scale</div>
+      <div class="section-kicker">20 · Scale</div>
       <h2>容量与演进</h2>
       <ul>
         <li><strong>当前容量：</strong>单节点 ≤200 活跃用户；SQLite WAL 单写者；LLM 延迟远大于 DB 写，实际瓶颈在模型与沙箱。</li>
@@ -458,24 +561,24 @@ docker compose up -d --build
     </section>
 
     <section id="reviews">
-      <div class="section-kicker">19 · Review gates</div>
+      <div class="section-kicker">21 · Review gates</div>
       <h2>评审记录</h2>
       <table>
         <thead><tr><th>Gate</th><th>范围</th><th>结论</th><th>处置</th></tr></thead>
         <tbody>
           <tr><td>G0</td><td>架构、租户、沙箱、范围</td><td>条件通过 / 缩减 v1</td><td>采纳：不可变版本、安装校验、Docker 隔离、迁移、备份、SSE 生命周期等</td></tr>
-          <tr><td>G1</td><td>后端安全、市场、运行时</td><td>NO-GO → 修复 → GO</td><td>修复市场凭据泄漏、overview 越权、IP 轮换限流、安装孤儿、stale run、记忆授权、沙箱网络、平台审计与迁移兼容；23 项回归测试</td></tr>
+          <tr><td>G1</td><td>后端安全、市场、运行时</td><td>NO-GO → 修复 → GO</td><td>修复市场凭据泄漏、overview 越权、IP 轮换限流、安装孤儿、stale run、记忆授权、沙箱网络、平台审计与迁移兼容；23 项回归测试（v1.1 前）</td></tr>
           <tr><td>G2</td><td>产品体验 / 桌面 &amp; 移动</td><td>条件通过 → 已修复</td><td>修正 @/slash 误导、示例消息标识、市场安装去向/权限、错误态、移动表格、焦点与对比度</td></tr>
           <tr><td>G3</td><td>测试 / 构建 / 质量</td><td>条件通过 → 已修复</td><td>干净 npm ci 后 tsc/build/23 测试通过；修复开发沙箱、4xx、seed 幂等、工具输出上限</td></tr>
           <tr><td>G4</td><td>Docker / 阿里云</td><td>条件通过 → 已修复</td><td>修复恢复 WAL/权限、占位密钥、日志轮转、超时、迁移孤儿、.dockerignore；preflight 自检</td></tr>
-          <tr><td>G5</td><td>最终验收</td><td>条件通过</td><td>无确认的阻断代码缺陷；23/23 测试、类型与构建通过。Docker、Caddy、真实模型与队列隔离需在目标环境冒烟</td></tr>
+          <tr><td>G5</td><td>最终验收</td><td>条件通过</td><td>无确认的阻断代码缺陷；33/33 测试、类型与构建通过。Docker、Caddy、真实模型与队列隔离需在目标环境冒烟</td></tr>
         </tbody>
       </table>
       <p class="small">G1 的完整发现与修复记录见仓库 <code>docs/REVIEW.md</code>。独立 reviewer 在修复后复查关键路径，避免“自己审自己”。</p>
     </section>
 
     <section id="debt">
-      <div class="section-kicker">20 · Debt</div>
+      <div class="section-kicker">22 · Debt</div>
       <h2>技术债与风险登记</h2>
       <table>
         <thead><tr><th>风险</th><th>影响</th><th>缓解 / 计划</th></tr></thead>

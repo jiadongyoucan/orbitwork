@@ -13,13 +13,15 @@ type SettingsState = {
   allowMemberPublish: boolean;
   sandboxEnabled: boolean;
   memoryEnabled: boolean;
+  networkEnabled: boolean;
+  filesEnabled: boolean;
 };
 
 export default function SettingsPage() {
-  const { workspace, user, refresh } = useAuth();
+  const { workspace, refresh } = useAuth();
   const toast = useToast();
   const navigate = useNavigate();
-  const [settings, setSettings] = useState<SettingsState>({ defaultModel: '', allowMemberPublish: true, sandboxEnabled: true, memoryEnabled: true });
+  const [settings, setSettings] = useState<SettingsState>({ defaultModel: '', allowMemberPublish: true, sandboxEnabled: true, memoryEnabled: true, networkEnabled: true, filesEnabled: true });
   const [models, setModels] = useState<ModelOption[]>([]);
   const [demo, setDemo] = useState(false);
   const [name, setName] = useState(workspace?.name ?? '');
@@ -27,7 +29,7 @@ export default function SettingsPage() {
   const [saving, setSaving] = useState(false);
   const [passwords, setPasswords] = useState({ current: '', next: '', confirm: '' });
   const [passwordSaving, setPasswordSaving] = useState(false);
-  const isAdmin = workspace?.role !== 'member' || user?.platformRole === 'admin';
+  const isAdmin = workspace?.role === 'owner' || workspace?.role === 'admin';
 
   useEffect(() => {
     if (!workspace) return;
@@ -42,6 +44,8 @@ export default function SettingsPage() {
           allowMemberPublish: settingData.settings.allowMemberPublish !== false,
           sandboxEnabled: settingData.settings.sandboxEnabled !== false,
           memoryEnabled: settingData.settings.memoryEnabled !== false,
+          networkEnabled: settingData.settings.networkEnabled !== false,
+          filesEnabled: settingData.settings.filesEnabled !== false,
         });
         setModels(modelData.models);
         setDemo(modelData.demo);
@@ -119,6 +123,8 @@ export default function SettingsPage() {
               <div style={{ display: 'flex', flexDirection: 'column', gap: 12, borderTop: '1px solid var(--line)', paddingTop: 14 }}>
                 <Toggle checked={settings.memoryEnabled} onChange={(value) => isAdmin && setSettings({ ...settings, memoryEnabled: value })} label="允许工作区使用长期记忆" />
                 <Toggle checked={settings.sandboxEnabled} onChange={(value) => isAdmin && setSettings({ ...settings, sandboxEnabled: value })} label="允许智能体调用代码沙箱" />
+                <Toggle checked={settings.filesEnabled} onChange={(value) => isAdmin && setSettings({ ...settings, filesEnabled: value })} label="允许工作区文件（上传与读写工具）" />
+                <Toggle checked={settings.networkEnabled} onChange={(value) => isAdmin && setSettings({ ...settings, networkEnabled: value })} label="允许智能体联网抓取网页（web_fetch）" />
                 <Toggle checked={settings.allowMemberPublish} onChange={(value) => isAdmin && setSettings({ ...settings, allowMemberPublish: value })} label="允许普通成员发布资产到插件市场" />
               </div>
               {demo && (

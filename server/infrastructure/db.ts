@@ -11,7 +11,7 @@ export type DB = DatabaseSync;
  * version; every migration runs once and in a single transaction.
  * Never edit a shipped migration — append a new one.
  */
-const MIGRATIONS: { version: number; name: string; sql: string }[] = [
+const MIGRATIONS: { version: number; name: string; sql?: string; run?: (db: DB) => void }[] = [
   {
     version: 1,
     name: 'initial schema',
@@ -255,6 +255,57 @@ CREATE TABLE platform_audit_logs (
 CREATE INDEX idx_platform_audit ON platform_audit_logs(created_at DESC);
 `,
   },
+  {
+    version: 3,
+    name: 'workspace files',
+    sql: `
+CREATE TABLE files (
+  id TEXT PRIMARY KEY,
+  workspace_id TEXT NOT NULL REFERENCES workspaces(id) ON DELETE CASCADE,
+  chat_id TEXT REFERENCES chats(id) ON DELETE SET NULL,
+  name TEXT NOT NULL,
+  mime TEXT NOT NULL DEFAULT 'application/octet-stream',
+  size INTEGER NOT NULL,
+  sha256 TEXT NOT NULL,
+  storage_key TEXT NOT NULL,
+  text_preview TEXT NOT NULL DEFAULT '',
+  created_by TEXT NOT NULL REFERENCES users(id),
+  created_at INTEGER NOT NULL,
+  updated_at INTEGER NOT NULL,
+  UNIQUE(workspace_id, name)
+);
+CREATE INDEX idx_files_ws ON files(workspace_id, updated_at DESC);
+`,
+  },
+  {
+    version: 4,
+    name: 'conversation trace + reasoning timing',
+    run: (db) => {
+      db.exec(`
+CREATE TABLE IF NOT EXISTS trace_events (
+  id TEXT PRIMARY KEY,
+  workspace_id TEXT NOT NULL REFERENCES workspaces(id) ON DELETE CASCADE,
+  chat_id TEXT NOT NULL REFERENCES chats(id) ON DELETE CASCADE,
+  run_id TEXT,
+  seq INTEGER NOT NULL,
+  kind TEXT NOT NULL,
+  phase TEXT NOT NULL DEFAULT '',
+  status TEXT NOT NULL DEFAULT 'ok',
+  duration_ms INTEGER NOT NULL DEFAULT 0,
+  detail_json TEXT NOT NULL DEFAULT '{}',
+  created_at INTEGER NOT NULL,
+  UNIQUE(chat_id, seq)
+);
+CREATE INDEX IF NOT EXISTS idx_trace_chat ON trace_events(chat_id, seq);
+`);
+      // ALTER is skipped when the column (or the table) is already there, so a
+      // partially migrated or legacy database cannot brick the boot.
+      const columns = db.prepare('PRAGMA table_info(messages)').all() as Array<{ name: string }>;
+      if (!columns.length) throw new Error('migration 4 requires the messages table');
+      if (!columns.some((column) => column.name === 'run_id')) db.exec('ALTER TABLE messages ADD COLUMN run_id TEXT');
+      if (!columns.some((column) => column.name === 'reasoning_ms')) db.exec('ALTER TABLE messages ADD COLUMN reasoning_ms INTEGER NOT NULL DEFAULT 0');
+    },
+  },
 ];
 
 function runMigrations(db: DB): void {
@@ -264,7 +315,8 @@ function runMigrations(db: DB): void {
     if (migration.version <= current) continue;
     db.exec('BEGIN IMMEDIATE');
     try {
-      db.exec(migration.sql);
+      if (migration.run) migration.run(db);
+      else db.exec(migration.sql ?? '');
       db.exec(`PRAGMA user_version = ${migration.version}`);
       db.exec('COMMIT');
       current = migration.version;

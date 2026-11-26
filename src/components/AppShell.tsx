@@ -3,7 +3,7 @@ import { Link, NavLink, Navigate, useLocation, useNavigate } from 'react-router-
 import {
   Activity, Boxes, ChevronDown, ChevronLeft, ChevronRight, Clock3, LogOut, Menu, MessageSquarePlus,
   PanelLeftClose, Plus, Search, Settings, Shield, Sparkles, Store, UserRound, Users, X, Zap, BookOpen,
-  Plug, Bot, BrainCircuit, Code2, LayoutDashboard,
+  Plug, Bot, BrainCircuit, Code2, LayoutDashboard, FolderOpen,
 } from 'lucide-react';
 import { api, errorMessage } from '@/lib/api';
 import { useAuth } from '@/context/AuthContext';
@@ -23,6 +23,7 @@ const PRIMARY_NAV = [
 ];
 
 const SECONDARY_NAV = [
+  { to: '/app/files', label: '文件', icon: FolderOpen },
   { to: '/app/memories', label: '记忆', icon: BrainCircuit },
   { to: '/app/sandbox', label: '沙箱', icon: Code2 },
   { to: '/app/members', label: '成员与权限', icon: Users },
@@ -213,7 +214,7 @@ export function AppShell({ children }: { children: ReactNode }) {
 
           <div className="nav-label"><span>更多</span></div>
           <nav className="nav-group">
-            {SECONDARY_NAV.map(({ to, label, icon: NavIcon }) => (
+            {SECONDARY_NAV.filter((item) => item.to !== '/app/files' || workspace?.settings.filesEnabled !== false).map(({ to, label, icon: NavIcon }) => (
               <NavLink key={to} to={to} className={({ isActive }) => cn('nav-item', isActive && 'active')}>
                 <NavIcon size={15} /><span>{label}</span>
               </NavLink>

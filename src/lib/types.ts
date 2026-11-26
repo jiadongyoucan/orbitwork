@@ -67,7 +67,41 @@ export type Message = {
   model?: string;
   inputTokens?: number;
   outputTokens?: number;
+  reasoningMs?: number;
+  runId?: string;
   createdAt?: number;
+};
+
+export type TraceEvent = {
+  id: string;
+  runId: string | null;
+  seq: number;
+  kind: string;
+  phase: string;
+  status: string;
+  durationMs: number;
+  at: number;
+  detail: Record<string, unknown>;
+};
+
+export type TraceRun = {
+  id: string;
+  status: string;
+  model: string;
+  tokensIn: number;
+  tokensOut: number;
+  error: string;
+  startedAt: number;
+  finishedAt: number | null;
+};
+
+export type TracePayload = {
+  runs: TraceRun[];
+  events: TraceEvent[];
+  totals: { events: number; durationMs: number; tokensIn: number; tokensOut: number; errors: number };
+  metrics: { totalMs: number; modelMs: number; toolMs: number; firstTokenMs: number };
+  truncated: boolean;
+  totalEvents: number;
 };
 
 export type Memory = {
@@ -158,4 +192,17 @@ export type AuditLog = {
   actor_name?: string;
   actor_email?: string;
   workspace_name?: string;
+};
+
+export type WorkspaceFile = {
+  id: string;
+  name: string;
+  mime: string;
+  size: number;
+  sha256: string;
+  text: boolean;
+  chatId: string | null;
+  createdBy: string;
+  createdAt: number;
+  updatedAt: number;
 };

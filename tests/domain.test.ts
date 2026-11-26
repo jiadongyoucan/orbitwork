@@ -2,6 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { hashPassword, verifyPassword, encryptSecret, decryptSecret, slugify } from '../server/domain/security.js';
 import { hasRole, assertRole } from '../server/domain/errors.js';
+import { redactSecrets } from '../server/domain/redact.js';
 import { validateAssetPayload } from '../server/domain/schemas.js';
 import { assertSafeUrl } from '../server/infrastructure/connectors.js';
 import { openDb } from '../server/infrastructure/db.js';
@@ -69,7 +70,7 @@ test('file database migrates to the latest version and supports consistent backu
     const path = join(dir, 'test.db');
     const db = openDb(path);
     const version = db.prepare('PRAGMA user_version').get() as { user_version: number };
-    assert.equal(version.user_version, 2);
+    assert.equal(version.user_version, 4);
     db.prepare("INSERT INTO users (id,email,name,password_hash,created_at) VALUES ('u1','a@b.test','A','x',1)").run();
     const backup = join(dir, 'backup.db');
     db.exec(`VACUUM INTO '${backup}'`);
@@ -90,6 +91,7 @@ test('legacy v1 orphan installs and plaintext headers are cleaned during upgrade
     const legacy = new DatabaseSync(path);
     legacy.exec(`
       CREATE TABLE users (id TEXT PRIMARY KEY);
+      CREATE TABLE messages (id TEXT PRIMARY KEY);
       CREATE TABLE workspaces (id TEXT PRIMARY KEY);
       CREATE TABLE assets (id TEXT PRIMARY KEY, kind TEXT, payload_json TEXT);
       CREATE TABLE asset_versions (id TEXT PRIMARY KEY, snapshot_json TEXT, content_hash TEXT);
@@ -107,7 +109,7 @@ test('legacy v1 orphan installs and plaintext headers are cleaned during upgrade
     legacy.close();
     const db = openDb(path);
     const version = db.prepare('PRAGMA user_version').get() as { user_version: number };
-    assert.equal(version.user_version, 2);
+    assert.equal(version.user_version, 4);
     assert.equal((db.prepare('SELECT COUNT(*) as n FROM asset_installs').get() as { n: number }).n, 0);
     const asset = db.prepare("SELECT payload_json FROM assets WHERE id = 'a1'").get() as { payload_json: string };
     assert.equal(JSON.parse(asset.payload_json).headers, undefined);
@@ -115,6 +117,39 @@ test('legacy v1 orphan installs and plaintext headers are cleaned during upgrade
     assert.equal(JSON.parse(snapshot.snapshot_json).payload.headers, undefined);
     const updatedHash = db.prepare("SELECT content_hash FROM asset_versions WHERE id = 'v1'").get() as { content_hash: string };
     assert.notEqual(updatedHash.content_hash, 'old-hash');
+    db.close();
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test('redaction removes keys, bearer tokens and URL query strings', () => {
+  const raw = 'model request failed (401) key sk-abc123456789 Bearer eyJhbGciOi.xx?token=1 https://api.example.com/v1?api_key=secret&x=1';
+  const safe = redactSecrets(raw);
+  assert.equal(safe.includes('sk-abc123456789'), false);
+  assert.equal(safe.includes('eyJhbGciOi'), false);
+  assert.equal(safe.includes('api_key=secret'), false);
+  assert.match(safe, /api\.example\.com\/v1\?…/);
+});
+
+test('a v3 database upgrades to v4 and gains the trace columns', () => {
+  const dir = mkdtempSync(join(tmpdir(), 'orbit-v3-'));
+  try {
+    const path = join(dir, 'v3.db');
+    let db = openDb(path);
+    db.exec('DROP TABLE trace_events');
+    db.exec('ALTER TABLE messages DROP COLUMN run_id');
+    db.exec('ALTER TABLE messages DROP COLUMN reasoning_ms');
+    db.exec('PRAGMA user_version = 3');
+    db.close();
+
+    db = openDb(path);
+    assert.equal((db.prepare('PRAGMA user_version').get() as { user_version: number }).user_version, 4);
+    const columns = (db.prepare('PRAGMA table_info(messages)').all() as Array<{ name: string }>).map((column) => column.name);
+    assert.ok(columns.includes('run_id'), 'run_id added');
+    assert.ok(columns.includes('reasoning_ms'), 'reasoning_ms added');
+    const trace = db.prepare("SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'trace_events'").get();
+    assert.ok(trace, 'trace_events created');
     db.close();
   } finally {
     rmSync(dir, { recursive: true, force: true });

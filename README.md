@@ -12,7 +12,12 @@ OrbitWork 是一个可以在一台云主机上运行的团队 AI 工作台。它
 
 - **智能体工作台**：新建会话、SSE 流式、工具调用、取消、模型切换、Token 用量；会话仅创建者可见。
 - **记忆**：显式事实卡、关键词注入、`save_memory` 工具、对象级授权。
-- **沙箱**：独立 worker、串行、6 秒超时、资源上限；生产环境使用文件队列 + `network:none` 容器。
+- **受限脚本执行（沙箱）**：独立 worker、串行、6 秒、128MB 上限；生产环境使用文件队列 + `network:none` 容器。定位是**内部半可信脚本**，不是「可运行用户上传代码」的安全沙箱。
+- **LLM 接入层（v1.3）**：`LlmPort` 单实现 + `LLM_ADAPTER=legacy|port` 灰度；推理字段归一（reasoning_content/reasoning/thinking/thought）、首包前重试与退避、usage 含 cached tokens。
+- **上下文预算（v1.3）**：按 token 估算裁剪历史（固定首条 user、旧工具结果压成一行），超出窗口不再直接报 provider 400。
+- **步数与轨迹（v1.3）**：`AGENT_MAX_STEPS` 默认 6（上限 12），达上限显式提示；轨迹支持 JSON/Markdown 导出与总/模型/工具/首 token 四宫格。
+- **轨迹与思考（v1.2）**：每次回答记录结构化轨迹（run / 提示 / 模型 / 首 token / 工具 / 错误 / 耗时），会话内「轨迹」抽屉可查看并复制为 Markdown；推理过程默认折叠、可展开，流式中显示「思考中」，完成后显示「已思考 Ns」。
+- **联网与文件（v1.1）**：服务端 `web_fetch`（SSRF 守卫、重定向逐跳复检、1MB / 15s 上限、每轮 5 次）与工作区文件（上传 / 预览 / 下载 / 删除，智能体 `list_files` / `read_file` / `write_file` 读写，单文件 5MB、工作区 200MB / 500 个配额）。
 - **专家 / 技能 / 连接器**：可创建、发布、安装、收藏；专家一键启用为智能体。
 - **插件市场**：把能力打包为插件，一键安装；不可变版本快照；管理员下架/恢复/精选。
 - **多租户与治理**：scrypt 密码、服务端会话、工作区 RBAC、邀请、审计、平台管理后台。
@@ -47,6 +52,34 @@ LLM_MODELS=deepseek-chat:DeepSeek Chat,deepseek-reasoner:DeepSeek Reasoner
 
 未配置 `LLM_API_KEY` 时自动进入演示模式：UI、权限、市场、沙箱全部可用，但回复为本地生成的示例文本，便于零成本验收。
 
+### 联网与文件（v1.1 新增，默认开启）
+
+```dotenv
+WEB_FETCH_ENABLED=true          # 智能体 web_fetch 总开关
+WEB_FETCH_TIMEOUT_MS=15000
+WEB_FETCH_MAX_BYTES=1048576
+WEB_FETCH_MAX_CHARS=20000
+FILES_MAX_FILE_BYTES=5242880    # 单文件 5MB
+FILES_MAX_WORKSPACE_BYTES=209715200  # 工作区 200MB
+FILES_MAX_COUNT=500
+# FILES_DIR 默认 <DATA_DIR>/files
+
+# v1.3 模型接入与上下文
+LLM_ADAPTER=legacy          # legacy | port（port 开启推理归一并启用重试）
+LLM_MAX_RETRIES=2
+LLM_RETRY_BASE_MS=250
+LLM_CONTEXT_WINDOW=128000
+AGENT_MAX_STEPS=6           # 1-12
+```
+
+工作区文件存在 `/app/.data/files/`（与 SQLite 同一个 `orbit_data` 卷）。**备份时必须连同文件一起备份**：
+
+```bash
+docker compose run --rm app node dist/backup.js
+docker run --rm -v orbitwork_orbit_data:/data -v "$PWD/backups:/backup" alpine \
+  tar czf /backup/orbitwork-files-$(date +%F).tgz -C /data files
+```
+
 ## 本地开发（不用 Docker）
 
 需要 Node.js 24+。
@@ -62,7 +95,7 @@ npm run dev
 
 ```bash
 npm run typecheck      # tsc --noEmit
-NODE_ENV=test npm test # 23 项领域 + API 集成测试
+NODE_ENV=test npm test # 63 项领域 + API 集成测试
 npm run build          # 生产客户端 + 服务端 bundle
 npm run start          # node dist/server.js（读取 .env）
 ```
@@ -73,15 +106,16 @@ npm run start          # node dist/server.js（读取 .env）
 Caddy (TLS, SSE-friendly)
   └── app (Node 24 + Fastify + React SPA + SQLite WAL)
         ├── /app/.data/orbitwork.db    (named volume)
+        ├── /app/.data/files/          (workspace file blobs, same volume)
         └── /jobs/inbox|outbox         (file queue volume)
               └── sandbox (network:none, read-only, 256MB/0.5CPU, 6s)
 ```
 
 - 单节点模块化单体，无外部数据库/缓存依赖。
 - `node:sqlite` + WAL + 事务化版本迁移 + `VACUUM INTO` 备份。
-- 16 张表覆盖身份、工作区、智能体、会话、运行、记忆、资产、版本、安装、收藏、审计。
+- 18 张表覆盖身份、工作区、智能体、会话、运行、记忆、资产、版本、安装、收藏、审计。
 - 前端由 esbuild 单次打包（约 200ms），无 Vite/Tailwind 工具链。
-- 生产沙箱通过文件队列与 app 通信，**不共享网络**，无 Docker socket，无应用密钥。
+- 生产沙箱通过文件队列与 app 通信，**不共享网络**，无 Docker socket，无应用密钥；它只保证「内部半可信脚本」的执行边界。
 
 详细设计、威胁模型、API 与部署说明：
 
@@ -94,9 +128,9 @@ Caddy (TLS, SSE-friendly)
 
 ## 安全说明
 
-已实现：scrypt 密码哈希、HttpOnly 会话、工作区/对象级授权、聊天私有、Zod 校验、Origin + JSON Content-Type、账号级与 IP 级限流、AES-256-GCM 连接器密钥、SSRF 防护、不可变市场快照、平台审计、沙箱网络隔离。
+已实现：scrypt 密码哈希、HttpOnly 会话、工作区/对象级授权、聊天私有、Zod 校验、Origin + JSON Content-Type、账号级与 IP 级限流、AES-256-GCM 连接器密钥、SSRF 防护（IPv4/IPv6/NAT64，抓取强制关闭私网）、文件路径 UUID 化与配额、不可变市场快照、平台审计、沙箱容器网络隔离（不构成用户代码执行沙箱）。
 
-V1 限制：无 MFA/SSO、无邮件找回、无 SSE 断线重放、SQLite 单节点、单 APP_SECRET 无轮换、连接器无按租户出口白名单。详见架构文档「技术债」。
+V1.1 限制：无 MFA/SSO、无邮件找回、无 SSE 断线重放、SQLite 单节点、单 APP_SECRET 无轮换、连接器无按租户出口白名单；文件仅支持文本预览（PDF/Office 需下载）、无版本历史、无分享链接；`web_fetch` 的 DNS rebinding 仍属残余风险。详见架构文档「技术债」。
 
 ## 目录
 
@@ -114,3 +148,17 @@ Caddyfile
 ## 已知交付边界
 
 本仓库已完成代码、测试、构建与 Compose/Caddy 配置，并在本机完成 Node 运行时与浏览器端到端冒烟。当前构建环境没有 Docker daemon，因此 **`docker compose up` 未在本机实机运行**；上线前请按 `docs/DEPLOYMENT.md` 在目标 Docker/ECS 环境执行一次启动、TLS、流式与沙箱隔离冒烟。
+
+## 版本与交付包
+
+仓库使用 Git 管理，当前版本 `v1.3.0`（标签 `v1.3.0`）。
+
+```bash
+git log --oneline        # 提交历史
+git tag                  # 发布标签
+npm run package          # 生成 output/orbitwork-v<version>-<YYYYMMDD-HHMM>.zip
+```
+
+- `output/` 只存放可交付的源码压缩包；zip 本身不入库，仅保留 `output/README.md`。
+- 打包内容来自当前工作区，已排除 `node_modules`、`dist`、`.data`、`.npm-cache`、`.shots`、`.git`、`.memsearch`、`output`、`.env`（含本地密钥）与日志；`.env.example` 会包含在内。
+- 解压后按「快速开始」执行；先 `cp .env.example .env` 并填写密钥。

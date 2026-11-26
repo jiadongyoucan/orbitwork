@@ -11,6 +11,7 @@ import AgentsPage from '@/pages/Agents';
 import { ConnectorsPage, ExpertsPage, SkillsPage } from '@/pages/Assets';
 import MarketPage from '@/pages/Market';
 import MemoriesPage from '@/pages/Memories';
+import FilesPage from '@/pages/Files';
 import SandboxPage from '@/pages/Sandbox';
 import MembersPage from '@/pages/Members';
 import SettingsPage from '@/pages/Settings';
@@ -67,6 +68,7 @@ export default function App() {
               <Route path="connectors" element={<ConnectorsPage />} />
               <Route path="market" element={<MarketPage />} />
               <Route path="memories" element={<MemoriesPage />} />
+              <Route path="files" element={<FilesPage />} />
               <Route path="sandbox" element={<SandboxPage />} />
               <Route path="members" element={<MembersPage />} />
               <Route path="settings" element={<SettingsPage />} />

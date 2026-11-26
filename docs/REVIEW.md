@@ -109,3 +109,35 @@ Verified: 23/23 tests, typecheck clean, build clean, live dev sandbox `4`, docs 
 Remaining HIGH findings were fixed after the gate: suspended assets can no longer be republished by authors (403, test added); expert payloads are now explicitly prompt-only (removed unused skill/connector fields); production sandbox queue was exercised locally (`queue-mode 42`) and remains the Compose path; docs now qualify that the development HTTP worker has network access; stale-run threshold is documented at 15 minutes and the sandbox timeout default is aligned at 6 seconds. `content_hash` update is guarded by schema introspection.
 
 **Target checks still required:** Docker compose build/start, Caddy TLS/SSE, `/jobs` ownership and sandbox `network:none`, volume ownership, backup/restore under Docker, real LLM tool loop and connector secrets, and Aliyun port/origin/cookie posture. See `docs/DEPLOYMENT.md`.
+
+## G6 — v1.1 controlled network & workspace files (2026-11-26)
+
+Three independent reviewers, one per stage; every finding traceable in `docs/DESIGN-network-files.md` §10–11.
+
+| Stage | Reviewer | Verdict | Disposition |
+|---|---|---|---|
+| Design | adversarial design review | 8 findings, 2 BLOCKER | SSRF flag could unlock private egress → fixed with explicit `allowPrivate:false`; IPv6/NAT64/6to4/Teredo escapes → byte-level global-unicast check; file names in system prompt → removed (count only); `read_file` 100KB vs 8KB contract → paged at 7.6k chars. DNS-rebinding TOCTOU accepted as documented residual risk. |
+| Implementation | code & security review | 11 findings, 0 BLOCKER | Cross-member overwrite → 403 + audit; list cap 200 < quota 500 → raised; read-window loop → fixed; `max_chars` truncation → 500–7600; connectors gated by `networkEnabled` and shared 5-request budget; disabled feature removed from nav/page; MIME whitelist; `no-store`; workspace-role-only settings guard; charset decoding; blob downloads. |
+| Acceptance | QA acceptance | A / B / C / E PASS, D FAIL (docs) | Stale test counts in `architecture.html` and DESIGN, missing README env/backup notes → fixed. Final: **41/41 tests**. |
+
+Target-machine verification (this host): typecheck clean; 41/41 tests; production build; prod runtime upload → list → text → download → UUID blob on disk; `web_fetch` 200 on example.com and `PRIVATE_URL` for 127.0.0.1 / 169.254.169.254 / [::1] / ::ffff / NAT64 / fe80 / 6to4; Docker Compose rebuild and in-container file round-trip writing under `/app/.data/files` as uid 1000; headless Chrome screenshots of the enabled and disabled Files page with no console errors.
+
+## G7 — v1.2 conversation trace & collapsible reasoning (2026-11-26)
+
+| Stage | Reviewer | Verdict | Disposition |
+|---|---|---|---|
+| Design | adversarial design review | 8 findings, 1 BLOCKER | Migration v4 guard + `UNIQUE(chat_id, seq)`; trace payload carries `runId`; `reasoning_ms` accumulated per model call; retention fixed to exactly 1000; file names and provider error bodies removed/redacted; truncation metadata added; reasoning block keeps expansion across the silent reload. |
+| Implementation | code & security review | 2 HIGH, 4 MED, 8 LOW | Duplicate drawer, chat-switch race, cancel-as-error, reasoning timing on abort, error redaction, idempotent migration, atomic seq, drawer refresh, reasoning live state, key preservation, a11y; all fixed, 4 tests added. |
+| Acceptance | QA acceptance | PASS (after fixes) | 45/45 tests, typecheck, build; v3→v4 upgrade verified; UI: 1 overlay, 5 trace rows, "已思考 8.6s · 66 字", 0 console errors. |
+
+Independent QA at 8286260: typecheck clean, 45/45 tests, production build 1.4s, zip clean of secrets, v3→v4 upgrade reproduced (columns + UNIQUE index + 1000-row cap, min seq 101, chat delete cascade), trace route owner-only, meta before trace, abort → cancelled with empty error. UI: collapsed "已思考 8.6s · 66 字", expanded body, single overlay, 5 trace rows, 0 console errors. Blockers: none.
+
+## G8 — v1.3 LLM port & context budget (2026-11-26)
+
+| Stage | Reviewer | Verdict | Disposition |
+|---|---|---|---|
+| Design | adversarial design review | 8 findings, 2 BLOCKER | 30-row history window → 2000 + token trim; per-call `fitMessages` for tool loops; token-aware pin truncation; adapter per call + numeric config guards; retry jitter/abortable sleep/generic errors; metrics share one window; sandbox flags shared with the test. Step-limit final summary deferred (cost). |
+| Implementation | code & security review | 3 HIGH, 7 MED, 4 LOW | Empty/non-SSE stream treated as success; `[DONE]` not ending the read; `model.done` outside finally; duplicated tool names; small-window overflow; timeout spanning the whole generation; cumulative reasoning duplication; terminal-step tools never sent; notice persisted into content; two totals in the drawer. All fixed except export loading state. |
+| Acceptance | QA acceptance | PASS (no blockers) | 63/63 tests, typecheck, build 975ms, zip clean of secrets, tag==HEAD, preflight warnings only. Residual: some B/C/D sub-assertions verified at suite level rather than re-read line by line. |
+
+Target verification: 58/58 tests, typecheck clean, production build; live API shows metrics (total/model/tool/first-token) and budget fields; `/trace/export?format=md` returns an attachment; UI drawer renders the four-metric grid and export buttons with 0 console errors.

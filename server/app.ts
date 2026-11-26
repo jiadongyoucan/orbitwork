@@ -6,11 +6,13 @@ import { resolve } from 'node:path';
 import { ZodError } from 'zod';
 import { config } from './config.js';
 import { openDb, type DB } from './infrastructure/db.js';
+import { cleanupTempFiles } from './infrastructure/files.js';
 import { AppError } from './domain/errors.js';
 import { authRoutes } from './http/routes/auth.js';
 import { workspaceRoutes } from './http/routes/workspaces.js';
 import { agentRoutes } from './http/routes/agents.js';
 import { memoryRoutes } from './http/routes/memories.js';
+import { fileRoutes } from './http/routes/files.js';
 import { assetRoutes } from './http/routes/assets.js';
 import { chatRoutes } from './http/routes/chats.js';
 import { adminRoutes } from './http/routes/admin.js';
@@ -36,6 +38,7 @@ export async function createApp(options: AppOptions = {}): Promise<FastifyInstan
     throw new Error('APP_SECRET must be set to a unique 32+ character value in production');
   }
   const db: DB = openDb(options.dbPath ?? config.dbPath);
+  cleanupTempFiles();
   reconcileRunsOnBoot(db);
   if (options.seed !== false) await seedDatabase(db);
   const app = Fastify({
@@ -51,7 +54,8 @@ export async function createApp(options: AppOptions = {}): Promise<FastifyInstan
       return reply.code(403).send({ error: { code: 'BAD_ORIGIN', message: '请求来源不被允许' } });
     }
     if (['POST', 'PUT', 'PATCH'].includes(request.method) && request.url.startsWith('/api/') && Number(request.headers['content-length'] ?? 0) > 0) {
-      if (!String(request.headers['content-type'] ?? '').includes('application/json')) {
+      const rawUpload = /^\/api\/w\/[^/?]+\/files(?:\?|$)/.test(request.url) && /^(application\/octet-stream|text\/)/.test(String(request.headers['content-type'] ?? ''));
+      if (!rawUpload && !String(request.headers['content-type'] ?? '').includes('application/json')) {
         return reply.code(415).send({ error: { code: 'UNSUPPORTED_MEDIA_TYPE', message: '仅支持 application/json 请求体' } });
       }
     }
@@ -87,6 +91,12 @@ export async function createApp(options: AppOptions = {}): Promise<FastifyInstan
   });
 
   await app.register(cookie);
+  // Raw byte uploads are only accepted on the workspace file routes.
+  app.addContentTypeParser(
+    ['application/octet-stream', 'text/plain', 'text/markdown', 'text/csv'],
+    { parseAs: 'buffer', bodyLimit: config.files.maxFileBytes + 8192 },
+    (_request, body, done) => { done(null, body); },
+  );
   app.decorate('db', db);
   app.addHook('onClose', async () => db.close());
 
@@ -95,6 +105,7 @@ export async function createApp(options: AppOptions = {}): Promise<FastifyInstan
   await workspaceRoutes(app, db);
   await agentRoutes(app, db);
   await memoryRoutes(app, db);
+  await fileRoutes(app, db);
   await assetRoutes(app, db);
   await chatRoutes(app, db);
   await adminRoutes(app, db);

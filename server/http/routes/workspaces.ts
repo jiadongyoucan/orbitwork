@@ -5,6 +5,7 @@ import { now, tx } from '../../infrastructure/db.js';
 import { audit, requireUser, requireWorkspace } from '../context.js';
 import { assertRole, conflict, forbidden, notFound } from '../../domain/errors.js';
 import { hashPassword, randomToken, sha256 } from '../../domain/security.js';
+import { removeWorkspaceFiles } from '../../infrastructure/files.js';
 import { inviteInputSchema, memberRoleSchema, settingsSchema, workspaceInputSchema } from '../../domain/schemas.js';
 import { defaultModel, models } from '../../config.js';
 
@@ -102,6 +103,7 @@ export async function workspaceRoutes(app: FastifyInstance, db: DB) {
       }
       db.prepare('DELETE FROM workspaces WHERE id = ?').run(ctx.workspace.id);
     });
+    removeWorkspaceFiles(ctx.workspace.id);
     return { ok: true };
   });
 

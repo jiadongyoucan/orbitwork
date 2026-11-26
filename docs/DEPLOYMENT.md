@@ -98,9 +98,25 @@ LLM_BASE_URL=https://api.deepseek.com/v1
 LLM_API_KEY=<secret>
 LLM_MODELS=deepseek-chat:DeepSeek Chat,deepseek-reasoner:DeepSeek Reasoner
 LLM_TIMEOUT_MS=120000
+# v1.3：接入层与上下文（可灰度回退）
+LLM_ADAPTER=legacy          # legacy | port
+LLM_MAX_RETRIES=2
+LLM_RETRY_BASE_MS=250
+LLM_CONTEXT_WINDOW=128000
+AGENT_MAX_STEPS=6
 
 SANDBOX_TIMEOUT_MS=6000
 ALLOW_PRIVATE_CONNECTORS=false
+
+# v1.1 联网与文件（可选覆盖，默认值如下）
+WEB_FETCH_ENABLED=true
+WEB_FETCH_TIMEOUT_MS=15000
+WEB_FETCH_MAX_BYTES=1048576
+WEB_FETCH_MAX_CHARS=20000
+FILES_MAX_FILE_BYTES=5242880
+FILES_MAX_WORKSPACE_BYTES=209715200
+FILES_MAX_COUNT=500
+# FILES_DIR=/app/.data/files
 ```
 
 注意：
@@ -172,7 +188,18 @@ SQLite 使用 WAL，**不要直接 `cp` 数据库文件**。使用内置备份�
 docker compose run --rm app node dist/backup.js
 ```
 
-默认写入 `/app/.data/backups/`（即 `orbit_data` 卷），保留 14 天。宿主机 cron：
+默认写入 `/app/.data/backups/`（即 `orbit_data` 卷），保留 14 天。
+
+> **v1.1 起必须同时备份文件**。`backup.js` 只做 SQLite 的 `VACUUM INTO`，工作区文件在 `/app/.data/files/`，不在数据库里：
+>
+> ```bash
+> docker run --rm -v orbitwork_orbit_data:/data -v /opt/orbitwork/backups:/backup alpine \
+>   tar czf /backup/orbitwork-files-$(date +%F).tgz -C /data files
+> ```
+>
+> 恢复时先还原数据库，再把 `files/` 解回卷内的 `/app/.data/files`，并保持 UID 1000 属主。
+
+宿主机 cron：
 
 ```cron
 20 3 * * * cd /opt/orbitwork && docker compose run --rm app node dist/backup.js >> /var/log/orbitwork-backup.log 2>&1
@@ -224,6 +251,8 @@ docker compose ps
 - 建议告警：5xx 比例、登录 429 比例、SSE 中断率、LLM 请求 P95、沙箱超时率、磁盘 >80%。
 - 每日检查：备份文件存在、证书剩余天数、容器重启次数。
 - 不记录请求体、Cookie 或连接器密钥；日志中已有 redaction 由代码保证，但仍应避免在网关开启全量 body 日志。
+
+> **沙箱定位（v1.3）**：这里的能力是**受限脚本执行**，用于数据转换/算法验证等内部半可信脚本，不是「运行用户上传代码」的安全沙箱。若产品需要对外承诺用户代码执行，请引入 gVisor/E2B 等强隔离方案，并保留当前实现作为离线降级路径。
 
 ## 9. 常见问题
 
